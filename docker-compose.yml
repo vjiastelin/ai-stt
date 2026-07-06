@@ -1,0 +1,46 @@
+services:
+  whisper-api:
+    build:
+      context: .
+      dockerfile: docker/whisper-api.Dockerfile
+    environment:
+      WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
+      DEVICE: ${DEVICE:-cuda}
+      COMPUTE_TYPE: ${COMPUTE_TYPE:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - model-cache:/cache/huggingface
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 300s   # first start downloads the model
+    # Enable for DEVICE=cuda; leave commented on CPU-only hosts.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: docker/ai-service.Dockerfile
+    env_file: .env
+    environment:
+      WHISPER_API_URL: http://whisper-api:8000/v1
+    ports:
+      - "${AI_SERVICE_PORT:-8080}:8080"
+    volumes:
+      - ai-service-data:/data
+    depends_on:
+      whisper-api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  model-cache:
+  ai-service-data:
