@@ -1,5 +1,7 @@
 # ai-stt: S3-to-S3 Speech-to-Text Pipeline — Design Spec
 
+> **SUPERSEDED** by `2026-07-06-ai-stt-bpm-integration.md` — the S3-polling design was replaced by the BPM push/callback integration. Do not execute this plan.
+
 **Date:** 2026-07-05
 **Status:** Superseded by `2026-07-06-ai-stt-bpm-integration-design.md` (BPM push/callback integration replaced the S3-polling pipeline)
 
