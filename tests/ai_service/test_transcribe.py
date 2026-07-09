@@ -21,7 +21,7 @@ VERBOSE_JSON = {
 
 @pytest.fixture
 def wav(tmp_path):
-    path = tmp_path / "rec.wav"
+    path = tmp_path / "rec.mp3"
     path.write_bytes(b"RIFF-fake")
     return path
 

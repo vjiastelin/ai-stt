@@ -16,7 +16,7 @@ def test_request_transcription_accepts_and_enqueues(client_and_store):
     client, store = client_and_store
     response = client.post(
         "/requestTranscription",
-        json={"CallRecordId": "id-1", "CallRecordUrl": "s3://bucket/rec.wav"},
+        json={"CallRecordId": "id-1", "CallRecordUrl": "s3://bucket/rec.mp3"},
     )
     assert response.status_code == 200
     assert response.json() == {"status": "accepted", "CallRecordId": "id-1"}
@@ -25,7 +25,7 @@ def test_request_transcription_accepts_and_enqueues(client_and_store):
 
 def test_request_transcription_is_idempotent(client_and_store):
     client, store = client_and_store
-    body = {"CallRecordId": "id-1", "CallRecordUrl": "s3://bucket/rec.wav"}
+    body = {"CallRecordId": "id-1", "CallRecordUrl": "s3://bucket/rec.mp3"}
     assert client.post("/requestTranscription", json=body).status_code == 200
     store.set_status("id-1", "processing")
     assert client.post("/requestTranscription", json=body).status_code == 200
@@ -37,9 +37,10 @@ def test_request_transcription_is_idempotent(client_and_store):
     [
         {},
         {"CallRecordId": "id-1"},
-        {"CallRecordUrl": "s3://bucket/rec.wav"},
-        {"CallRecordId": "", "CallRecordUrl": "s3://bucket/rec.wav"},
-        {"CallRecordId": "id-1", "CallRecordUrl": "ftp://x/y.wav"},
+        {"CallRecordUrl": "s3://bucket/rec.mp3"},
+        {"CallRecordId": "", "CallRecordUrl": "s3://bucket/rec.mp3"},
+        {"CallRecordId": "id-1", "CallRecordUrl": "ftp://x/y.mp3"},
+        {"CallRecordId": "id-1", "CallRecordUrl": "s3://bucket/rec.wav"},  # mp3-only policy
     ],
 )
 def test_request_transcription_400_on_invalid(client_and_store, body):
@@ -59,7 +60,7 @@ def test_job_status_endpoint(client_and_store):
     client, store = client_and_store
     client.post(
         "/requestTranscription",
-        json={"CallRecordId": "id-1", "CallRecordUrl": "s3://bucket/rec.wav"},
+        json={"CallRecordId": "id-1", "CallRecordUrl": "s3://bucket/rec.mp3"},
     )
     response = client.get("/jobs/id-1")
     assert response.status_code == 200
@@ -90,7 +91,7 @@ def test_openapi_documents_request_and_response_schemas(client_and_store):
 
 def test_job_result_returns_summary_and_fulltext(client_and_store):
     client, store = client_and_store
-    store.enqueue("id-1", "s3://bucket/rec.wav")
+    store.enqueue("id-1", "s3://bucket/rec.mp3")
     store.set_result("id-1", "[00:00:00] привет мир", "краткое содержание")
     response = client.get("/jobs/id-1/result")
     assert response.status_code == 200
@@ -104,7 +105,7 @@ def test_job_result_returns_summary_and_fulltext(client_and_store):
 
 def test_job_result_empty_before_processing(client_and_store):
     client, store = client_and_store
-    store.enqueue("id-1", "s3://bucket/rec.wav")
+    store.enqueue("id-1", "s3://bucket/rec.mp3")
     response = client.get("/jobs/id-1/result")
     assert response.status_code == 200
     body = response.json()
@@ -120,8 +121,8 @@ def test_job_result_404_for_unknown(client_and_store):
 
 def test_list_jobs_endpoint(client_and_store):
     client, store = client_and_store
-    store.enqueue("id-1", "s3://b/1.wav")
-    store.enqueue("id-2", "s3://b/2.wav")
+    store.enqueue("id-1", "s3://b/1.mp3")
+    store.enqueue("id-2", "s3://b/2.mp3")
     store.set_status("id-2", "done")
     body = client.get("/jobs").json()
     assert body["count"] == 2
@@ -131,8 +132,8 @@ def test_list_jobs_endpoint(client_and_store):
 
 def test_list_jobs_endpoint_status_filter(client_and_store):
     client, store = client_and_store
-    store.enqueue("id-1", "s3://b/1.wav")
-    store.enqueue("id-2", "s3://b/2.wav")
+    store.enqueue("id-1", "s3://b/1.mp3")
+    store.enqueue("id-2", "s3://b/2.mp3")
     store.set_status("id-2", "done")
     body = client.get("/jobs?status=done").json()
     assert body["count"] == 1

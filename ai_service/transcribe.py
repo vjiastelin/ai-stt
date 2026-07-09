@@ -16,7 +16,7 @@ class Transcription:
     segments: list[Segment]
 
 
-def transcribe_file(cfg: ServiceConfig, wav_path: Path) -> Transcription:
+def transcribe_file(cfg: ServiceConfig, audio_path: Path) -> Transcription:
     data = {"model": cfg.whisper_model, "response_format": "verbose_json"}
     if cfg.language:
         data["language"] = cfg.language
@@ -24,10 +24,10 @@ def transcribe_file(cfg: ServiceConfig, wav_path: Path) -> Transcription:
     if cfg.whisper_api_key:
         headers["Authorization"] = f"Bearer {cfg.whisper_api_key}"
     try:
-        with wav_path.open("rb") as fh:
+        with audio_path.open("rb") as fh:
             response = httpx.post(
                 f"{cfg.whisper_api_url}/audio/transcriptions",
-                files={"file": (wav_path.name, fh, "audio/wav")},
+                files={"file": (audio_path.name, fh, "audio/mpeg")},
                 data=data,
                 headers=headers,
                 timeout=cfg.whisper_timeout_seconds,

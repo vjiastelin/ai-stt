@@ -37,7 +37,7 @@ def env(service_config, tmp_path, monkeypatch):
     with mock_aws():
         s3 = boto3.client("s3", region_name="us-east-1")
         s3.create_bucket(Bucket="call-records")
-        s3.put_object(Bucket="call-records", Key="rec.wav", Body=b"RIFF-fake")
+        s3.put_object(Bucket="call-records", Key="rec.mp3", Body=b"RIFF-fake")
         store = JobStore(str(tmp_path / "worker.db"))
         worker = Worker(service_config(), store, s3)
         monkeypatch.setattr(worker, "_sleep", lambda seconds: None)
@@ -50,7 +50,7 @@ def test_happy_path_process_then_deliver(env):
     respx.post(WHISPER_URL).mock(return_value=httpx.Response(200, json=VERBOSE_JSON))
     respx.post(LLM_URL).mock(return_value=httpx.Response(200, json=CHAT_RESPONSE))
     bpm = respx.post(BPM_URL).mock(return_value=httpx.Response(200))
-    store.enqueue("id-1", "s3://call-records/rec.wav")
+    store.enqueue("id-1", "s3://call-records/rec.mp3")
 
     assert worker.run_once() is True   # process → delivering
     assert store.get("id-1").status == "delivering"
@@ -74,7 +74,7 @@ def test_summary_disabled_skips_llm(env, service_config):
     llm = respx.post(LLM_URL).mock(return_value=httpx.Response(200, json=CHAT_RESPONSE))
     bpm = respx.post(BPM_URL).mock(return_value=httpx.Response(200))
     worker = Worker(service_config(summary_enabled=False), store, s3)
-    store.enqueue("id-1", "s3://call-records/rec.wav")
+    store.enqueue("id-1", "s3://call-records/rec.mp3")
 
     worker.run_once()
     worker.run_once()
@@ -88,7 +88,7 @@ def test_summary_disabled_skips_llm(env, service_config):
 def test_permanent_error_fails_after_max_retries(env):
     store, worker = env
     respx.post(WHISPER_URL).mock(return_value=httpx.Response(400, json={"detail": "corrupt"}))
-    store.enqueue("id-1", "s3://call-records/rec.wav")
+    store.enqueue("id-1", "s3://call-records/rec.mp3")
 
     for expected_attempts in (1, 2):
         worker.run_once()
@@ -105,7 +105,7 @@ def test_permanent_error_fails_after_max_retries(env):
 def test_infrastructure_error_propagates_without_counting(env):
     store, worker = env
     respx.post(WHISPER_URL).mock(return_value=httpx.Response(503))
-    store.enqueue("id-1", "s3://call-records/rec.wav")
+    store.enqueue("id-1", "s3://call-records/rec.mp3")
 
     with pytest.raises(InfrastructureError):
         worker.run_once()
@@ -117,7 +117,7 @@ def test_infrastructure_error_propagates_without_counting(env):
 def test_malformed_200_from_whisper_is_infrastructure_not_failed(env):
     store, worker = env
     respx.post(WHISPER_URL).mock(return_value=httpx.Response(200, content=b"<html>gateway</html>"))
-    store.enqueue("id-1", "s3://call-records/rec.wav")
+    store.enqueue("id-1", "s3://call-records/rec.mp3")
 
     with pytest.raises(InfrastructureError):
         worker.run_once()
@@ -131,8 +131,8 @@ def test_bpm_down_does_not_block_processing(env):
     respx.post(WHISPER_URL).mock(return_value=httpx.Response(200, json=VERBOSE_JSON))
     respx.post(LLM_URL).mock(return_value=httpx.Response(200, json=CHAT_RESPONSE))
     respx.post(BPM_URL).mock(return_value=httpx.Response(500))
-    store.enqueue("id-1", "s3://call-records/rec.wav")
-    store.enqueue("id-2", "s3://call-records/rec.wav")
+    store.enqueue("id-1", "s3://call-records/rec.mp3")
+    store.enqueue("id-2", "s3://call-records/rec.mp3")
 
     worker.run_once()  # processes id-1 → delivering
     assert worker.run_once() is True  # delivery of id-1 fails (logged), id-2 still processed
@@ -149,7 +149,7 @@ def test_delivering_job_resumes_without_retranscribing(env):
     store, worker = env
     whisper = respx.post(WHISPER_URL).mock(return_value=httpx.Response(200, json=VERBOSE_JSON))
     bpm = respx.post(BPM_URL).mock(return_value=httpx.Response(200))
-    store.enqueue("id-1", "s3://call-records/rec.wav")
+    store.enqueue("id-1", "s3://call-records/rec.mp3")
     store.set_result("id-1", "[00:00:00] сохранённый текст", "сохранённая суть")
 
     assert worker.run_once() is True

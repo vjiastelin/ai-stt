@@ -22,8 +22,9 @@ class TranscriptionRequest(BaseModel):
     )
     CallRecordUrl: str = Field(
         min_length=1,
-        description="Audio location: s3://bucket/key or a path-style http(s) object URL",
-        examples=["s3://call-records/2026/07/rec-123.wav"],
+        description="MP3 location: s3://bucket/key.mp3 or a path-style http(s) object URL"
+        " (must end in .mp3)",
+        examples=["s3://call-records/2026/07/rec-123.mp3"],
     )
 
 

@@ -4,6 +4,7 @@ import tempfile
 import threading
 from collections.abc import Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from typing import Literal
 
@@ -109,7 +110,9 @@ def create_app(cfg: ApiConfig, engine_factory: Callable | None) -> FastAPI:
         contents = await file.read()
         if not contents:
             raise HTTPException(status_code=400, detail="empty or missing audio file")
-        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
+        # suffix from the uploaded name helps PyAV pick the demuxer; default mp3
+        suffix = Path(file.filename or "").suffix or ".mp3"
+        with tempfile.NamedTemporaryFile(suffix=suffix) as tmp:
             tmp.write(contents)
             tmp.flush()
             try:

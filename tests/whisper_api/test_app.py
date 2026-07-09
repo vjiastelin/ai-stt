@@ -37,7 +37,7 @@ def post_wav(client, **form):
     data = {"model": "fake", "response_format": "verbose_json", **form}
     return client.post(
         "/v1/audio/transcriptions",
-        files={"file": ("a.wav", io.BytesIO(b"RIFF-fake"), "audio/wav")},
+        files={"file": ("a.mp3", io.BytesIO(b"RIFF-fake"), "audio/mpeg")},
         data=data,
     )
 
@@ -73,7 +73,7 @@ def test_transcription_503_while_loading():
 def test_empty_file_400(client):
     response = client.post(
         "/v1/audio/transcriptions",
-        files={"file": ("a.wav", io.BytesIO(b""), "audio/wav")},
+        files={"file": ("a.mp3", io.BytesIO(b""), "audio/mpeg")},
         data={"model": "fake", "response_format": "verbose_json"},
     )
     assert response.status_code == 400
@@ -90,7 +90,7 @@ def test_auth_enforced_when_key_set():
     assert post_wav(client).status_code == 401
     ok = client.post(
         "/v1/audio/transcriptions",
-        files={"file": ("a.wav", io.BytesIO(b"RIFF"), "audio/wav")},
+        files={"file": ("a.mp3", io.BytesIO(b"RIFF"), "audio/mpeg")},
         data={"model": "fake", "response_format": "verbose_json"},
         headers={"Authorization": "Bearer secret"},
     )

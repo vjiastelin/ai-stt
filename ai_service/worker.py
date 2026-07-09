@@ -94,9 +94,9 @@ class Worker:
             return
         try:
             with tempfile.TemporaryDirectory() as tmp:
-                wav_path = Path(tmp) / "audio.wav"
-                s3io.download(self.s3, bucket, key, wav_path)
-                result = transcribe.transcribe_file(self.cfg, wav_path)
+                audio_path = Path(tmp) / "audio.mp3"
+                s3io.download(self.s3, bucket, key, audio_path)
+                result = transcribe.transcribe_file(self.cfg, audio_path)
             full_text = formats.to_full_text(result.segments)
             summary = summarize.summarize(self.cfg, formats.to_plain_text(result.segments))
         except InfrastructureError:

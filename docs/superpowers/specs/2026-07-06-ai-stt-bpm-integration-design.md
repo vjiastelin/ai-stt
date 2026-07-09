@@ -7,7 +7,11 @@
 
 BPMSoft (Omni) creates a record in the «Запись разговора» table and pushes a transcription request to the AI service. The AI service downloads the call audio from S3, transcribes it (Whisper), optionally generates a summary (LLM), and delivers both back to BPM via callback, which fills the record's «Краткое содержание» and «Текст разговора» fields.
 
-Primary language: Russian. Target volume: tens to a few hundred calls/day.
+Primary language: Russian.
+
+**Workload (production figures):** ~850 calls/day, average recording ~5 minutes / ~4.5 MB, format **always MP3** (the API rejects anything else, §3.1).
+
+**Capacity check:** 850 × 5 min ≈ 71 h of audio/day; faster-whisper `large-v3` on a GPU runs at ~10–20× realtime → ~3.5–7 h of GPU time/day. Average arrival is ~1 call per 100 s vs ~15–30 s processing per call, so the single sequential worker and one GPU are sufficient with ample headroom for peak-hour bursts (the durable queue absorbs them).
 
 ### Sequence
 
@@ -85,16 +89,16 @@ Two services developed in this repo, plus one external dependency:
 Request body (JSON):
 
 ```json
-{"CallRecordId": "3fa85f64-5717-4562-b3fc-2c963f66afa6", "CallRecordUrl": "s3://call-records/2026/07/rec-123.wav"}
+{"CallRecordId": "3fa85f64-5717-4562-b3fc-2c963f66afa6", "CallRecordUrl": "s3://call-records/2026/07/rec-123.mp3"}
 ```
 
 - `200 {"status": "accepted", "CallRecordId": "..."}` — job stored durably; it **will** eventually be processed and delivered (or marked `failed`).
-- `400 {"detail": "..."}` — missing/empty `CallRecordId` or `CallRecordUrl`, non-JSON body, or unparseable URL scheme.
+- `400 {"detail": "..."}` — missing/empty `CallRecordId` or `CallRecordUrl`, non-JSON body, unparseable URL scheme, or a key that does not end in `.mp3`.
 - **Idempotent by `CallRecordId`:** re-POST of an existing job returns `200` without creating a duplicate (BPM retries the request until it gets 200). A job in status `failed` is re-queued by the repeat request; in any other status the request is a no-op acknowledgment.
 
-`CallRecordUrl` formats accepted:
-- `s3://<bucket>/<key>`
-- `http(s)://<s3-endpoint-host>/<bucket>/<key>` (path-style object URL; host is ignored, the configured `S3_ENDPOINT_URL` + credentials are used)
+`CallRecordUrl` formats accepted (the key must end in `.mp3`, case-insensitive — recordings are always MP3):
+- `s3://<bucket>/<key>.mp3`
+- `http(s)://<s3-endpoint-host>/<bucket>/<key>.mp3` (path-style object URL; host is ignored, the configured `S3_ENDPOINT_URL` + credentials are used)
 
 #### `GET /jobs/{CallRecordId}`
 
@@ -135,7 +139,7 @@ DB file lives on a volume (`DB_PATH`). On startup, jobs stuck in `processing`/`d
 ### 3.3 Processing pipeline (background worker, one job at a time)
 
 1. Take the oldest `queued` job → status `processing`.
-2. Parse `CallRecordUrl` → bucket/key; download via boto3 (configured endpoint + credentials) to a temp file.
+2. Parse `CallRecordUrl` → bucket/key; download the MP3 via boto3 (configured endpoint + credentials) to a temp file.
 3. `POST {WHISPER_API_URL}/audio/transcriptions` (multipart: file, `model`, `language`, `response_format=verbose_json`) → segments with start/end times.
 4. Build **FullText** — one line per segment with a timecode:
    ```

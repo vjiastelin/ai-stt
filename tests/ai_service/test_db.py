@@ -9,30 +9,30 @@ def store(tmp_path):
 
 
 def test_enqueue_and_get(store):
-    job = store.enqueue("id-1", "s3://bucket/a.wav")
+    job = store.enqueue("id-1", "s3://bucket/a.mp3")
     assert (job.call_record_id, job.status, job.attempts) == ("id-1", "queued", 0)
     assert store.get("id-1") == job
     assert store.get("missing") is None
 
 
 def test_enqueue_is_idempotent(store):
-    store.enqueue("id-1", "s3://bucket/a.wav")
+    store.enqueue("id-1", "s3://bucket/a.mp3")
     store.set_status("id-1", "processing")
-    again = store.enqueue("id-1", "s3://bucket/a.wav")
+    again = store.enqueue("id-1", "s3://bucket/a.mp3")
     assert again.status == "processing"  # not reset
 
 
 def test_enqueue_requeues_failed_job(store):
-    store.enqueue("id-1", "s3://bucket/a.wav")
+    store.enqueue("id-1", "s3://bucket/a.mp3")
     store.increment_attempts("id-1", "boom")
     store.mark_failed("id-1", "boom")
-    job = store.enqueue("id-1", "s3://bucket/a.wav")
+    job = store.enqueue("id-1", "s3://bucket/a.mp3")
     assert (job.status, job.attempts, job.error) == ("queued", 0, None)
 
 
 def test_next_pending_returns_oldest_queued_or_processing(store):
-    store.enqueue("id-1", "s3://b/1.wav")
-    store.enqueue("id-2", "s3://b/2.wav")
+    store.enqueue("id-1", "s3://b/1.mp3")
+    store.enqueue("id-2", "s3://b/2.mp3")
     store.set_status("id-1", "processing")  # restart-resume case
     assert store.next_pending().call_record_id == "id-1"
     store.mark_failed("id-1", "x")
@@ -40,7 +40,7 @@ def test_next_pending_returns_oldest_queued_or_processing(store):
 
 
 def test_set_result_moves_to_delivering(store):
-    store.enqueue("id-1", "s3://b/1.wav")
+    store.enqueue("id-1", "s3://b/1.mp3")
     store.set_result("id-1", "[00:00:00] привет", "краткое содержание")
     job = store.get("id-1")
     assert job.status == "delivering"
@@ -51,7 +51,7 @@ def test_set_result_moves_to_delivering(store):
 
 
 def test_attempts_and_failed(store):
-    store.enqueue("id-1", "s3://b/1.wav")
+    store.enqueue("id-1", "s3://b/1.mp3")
     assert store.increment_attempts("id-1", "err1") == 1
     assert store.increment_attempts("id-1", "err2") == 2
     assert store.get("id-1").error == "err2"
@@ -62,7 +62,7 @@ def test_attempts_and_failed(store):
 
 
 def test_survives_reopen(store, tmp_path):
-    store.enqueue("id-1", "s3://b/1.wav")
+    store.enqueue("id-1", "s3://b/1.mp3")
     store.set_result("id-1", "текст", "суть")
     reopened = JobStore(str(tmp_path / "jobs.db"))
     job = reopened.get("id-1")
@@ -70,16 +70,16 @@ def test_survives_reopen(store, tmp_path):
 
 
 def test_list_jobs_returns_all_newest_first(store):
-    store.enqueue("id-1", "s3://b/1.wav")
-    store.enqueue("id-2", "s3://b/2.wav")
-    store.enqueue("id-3", "s3://b/3.wav")
+    store.enqueue("id-1", "s3://b/1.mp3")
+    store.enqueue("id-2", "s3://b/2.mp3")
+    store.enqueue("id-3", "s3://b/3.mp3")
     jobs = store.list_jobs()
     assert [j.call_record_id for j in jobs] == ["id-3", "id-2", "id-1"]
 
 
 def test_list_jobs_filters_by_status(store):
-    store.enqueue("id-1", "s3://b/1.wav")
-    store.enqueue("id-2", "s3://b/2.wav")
+    store.enqueue("id-1", "s3://b/1.mp3")
+    store.enqueue("id-2", "s3://b/2.mp3")
     store.set_status("id-2", "done")
     assert [j.call_record_id for j in store.list_jobs(status="done")] == ["id-2"]
     assert [j.call_record_id for j in store.list_jobs(status="queued")] == ["id-1"]
@@ -87,7 +87,7 @@ def test_list_jobs_filters_by_status(store):
 
 def test_list_jobs_limit_and_offset(store):
     for i in range(5):
-        store.enqueue(f"id-{i}", f"s3://b/{i}.wav")
+        store.enqueue(f"id-{i}", f"s3://b/{i}.mp3")
     page1 = store.list_jobs(limit=2, offset=0)
     page2 = store.list_jobs(limit=2, offset=2)
     assert [j.call_record_id for j in page1] == ["id-4", "id-3"]

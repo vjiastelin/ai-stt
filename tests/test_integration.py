@@ -80,7 +80,9 @@ def test_full_chain(tmp_path, service_config):
             s3.create_bucket(Bucket="call-records")
             wav = tmp_path / "rec.wav"
             write_test_wav(wav, seconds=2.0)
-            s3.put_object(Bucket="call-records", Key="2026/rec.wav", Body=wav.read_bytes())
+            # key must be .mp3 (strict policy); content stays generated WAV bytes —
+            # FakeEngine never decodes them, and mp3 can't be generated without an encoder
+            s3.put_object(Bucket="call-records", Key="2026/rec.mp3", Body=wav.read_bytes())
 
             cfg = service_config(
                 whisper_api_url=f"http://127.0.0.1:{whisper_port}/v1",
@@ -92,7 +94,7 @@ def test_full_chain(tmp_path, service_config):
 
             response = api.post(
                 "/requestTranscription",
-                json={"CallRecordId": "call-1", "CallRecordUrl": "s3://call-records/2026/rec.wav"},
+                json={"CallRecordId": "call-1", "CallRecordUrl": "s3://call-records/2026/rec.mp3"},
             )
             assert response.status_code == 200
 

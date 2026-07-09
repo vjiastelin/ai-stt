@@ -22,6 +22,9 @@ def parse_call_record_url(url: str) -> tuple[str, str]:
         raise ValueError(f"unsupported CallRecordUrl scheme: {url!r}")
     if not bucket or not key:
         raise ValueError(f"CallRecordUrl must contain bucket and key: {url!r}")
+    if not key.lower().endswith(".mp3"):
+        # call recordings are always mp3 (strict policy, spec §3.1)
+        raise ValueError(f"CallRecordUrl must point to an .mp3 file: {url!r}")
     return bucket, urllib.parse.unquote(key)
 
 
