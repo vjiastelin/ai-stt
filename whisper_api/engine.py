@@ -27,7 +27,7 @@ class Engine:
         device: str,
         compute_type: str,
         vad_filter: bool = True,
-        condition_on_previous_text: bool = False,
+        condition_on_previous_text: bool = True,
     ):
         from faster_whisper import WhisperModel  # lazy: heavy import, needs the `api` extra
 
@@ -45,7 +45,7 @@ class Engine:
                     language=language or None,
                     beam_size=10,
                     vad_filter=self._vad_filter,
-                    condition_on_previous_text=True,
+                    condition_on_previous_text=self._condition_on_previous_text,
                     temperature=0,
                     compression_ratio_threshold=2.2,
                     log_prob_threshold=-1.0,

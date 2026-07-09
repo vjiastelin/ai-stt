@@ -57,3 +57,27 @@ def test_engine_passes_vad_and_conditioning_options(monkeypatch, tmp_path):
     assert captured["condition_on_previous_text"] is False
     assert captured["language"] == "ru"
     assert result.segments == []
+
+
+def test_engine_conditioning_defaults_to_true(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    captured = {}
+
+    class FakeWhisperModel:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def transcribe(self, path, **kwargs):
+            captured.update(kwargs)
+            return iter([]), SimpleNamespace(language="ru", duration=1.0)
+
+    monkeypatch.setitem(
+        sys.modules, "faster_whisper", SimpleNamespace(WhisperModel=FakeWhisperModel)
+    )
+    from whisper_api.engine import Engine
+
+    Engine("tiny", "cpu", "int8").transcribe("call.mp3", language="ru")
+
+    assert captured["condition_on_previous_text"] is True

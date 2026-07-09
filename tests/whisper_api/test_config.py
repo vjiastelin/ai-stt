@@ -28,10 +28,10 @@ def test_overrides():
 def test_vad_and_conditioning_defaults():
     cfg = load_config({})
     assert cfg.vad_filter is True
-    assert cfg.condition_on_previous_text is False
+    assert cfg.condition_on_previous_text is True
 
 
 def test_vad_and_conditioning_overrides():
-    cfg = load_config({"VAD_FILTER": "false", "CONDITION_ON_PREVIOUS_TEXT": "true"})
+    cfg = load_config({"VAD_FILTER": "false", "CONDITION_ON_PREVIOUS_TEXT": "false"})
     assert cfg.vad_filter is False
-    assert cfg.condition_on_previous_text is True
+    assert cfg.condition_on_previous_text is False

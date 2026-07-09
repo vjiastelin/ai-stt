@@ -13,7 +13,7 @@ class ApiConfig:
     port: int
     log_level: str
     vad_filter: bool = True
-    condition_on_previous_text: bool = False
+    condition_on_previous_text: bool = True
 
 
 def _parse_bool(env: Mapping[str, str], name: str, default: bool) -> bool:
@@ -36,5 +36,5 @@ def load_config(env: Mapping[str, str] = os.environ) -> ApiConfig:
         port=int(env.get("PORT", "8000")),
         log_level=env.get("LOG_LEVEL", "INFO"),
         vad_filter=_parse_bool(env, "VAD_FILTER", True),
-        condition_on_previous_text=_parse_bool(env, "CONDITION_ON_PREVIOUS_TEXT", False),
+        condition_on_previous_text=_parse_bool(env, "CONDITION_ON_PREVIOUS_TEXT", True),
     )
