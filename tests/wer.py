@@ -5,13 +5,18 @@ punctuation, collapse whitespace) shared by both the word- and char-level
 metrics, so callers get one consistent normalization.
 """
 import jiwer
+import re
+
+class NormalizeSpaces(jiwer.AbstractTransform):
+    def process_string(self, s):
+        return re.sub(r"\s+", " ", s)
 
 # Lowercase, drop punctuation, collapse whitespace. jiwer's RemovePunctuation
 # uses the Unicode ``P`` category, so Cyrillic text is preserved.
 _CLEAN = jiwer.Compose([
     jiwer.ToLowerCase(),
     jiwer.RemovePunctuation(),
-    jiwer.RemoveMultipleSpaces(),
+    NormalizeSpaces(),
     jiwer.Strip(),
 ])
 
