@@ -17,6 +17,9 @@ Two services:
 Summaries come from an external OpenAI-compatible LLM (`LLM_API_URL`);
 set `SUMMARY_ENABLED=false` to skip summarization (Summary is sent as `""`).
 
+Interactive API docs (Swagger UI) with request/response schemas:
+`http://localhost:8080/docs` (ai-service) and `http://<whisper-api-host>:8000/docs`.
+
 Design spec: `docs/superpowers/specs/2026-07-06-ai-stt-bpm-integration-design.md`.
 
 ## Run

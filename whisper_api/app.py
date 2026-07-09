@@ -5,12 +5,39 @@ import threading
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 
+from typing import Literal
+
 from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel
 
 from whisper_api.config import ApiConfig
 
 logger = logging.getLogger(__name__)
+
+
+class SegmentModel(BaseModel):
+    id: int
+    start: float
+    end: float
+    text: str
+
+
+class TranscriptionResponse(BaseModel):
+    task: Literal["transcribe"] = "transcribe"
+    language: str
+    duration: float
+    text: str
+    segments: list[SegmentModel]
+
+
+class HealthResponse(BaseModel):
+    status: Literal["ok"] = "ok"
+    model: str
+
+
+class ErrorResponse(BaseModel):
+    detail: str
 
 
 def create_app(cfg: ApiConfig, engine_factory: Callable | None) -> FastAPI:
@@ -44,12 +71,27 @@ def create_app(cfg: ApiConfig, engine_factory: Callable | None) -> FastAPI:
             raise HTTPException(status_code=503, detail="model loading")
         return app.state.engine
 
-    @app.get("/healthz")
+    @app.get(
+        "/healthz",
+        response_model=HealthResponse,
+        responses={503: {"model": ErrorResponse, "description": "Model still loading"}},
+        summary="Readiness probe (503 until the model is loaded)",
+    )
     def healthz():
         _require_engine()
         return {"status": "ok", "model": cfg.model}
 
-    @app.post("/v1/audio/transcriptions")
+    @app.post(
+        "/v1/audio/transcriptions",
+        response_model=TranscriptionResponse,
+        responses={
+            400: {"model": ErrorResponse, "description": "Empty or missing audio file"},
+            401: {"model": ErrorResponse, "description": "Invalid or missing API key"},
+            422: {"model": ErrorResponse, "description": "Unsupported parameters"},
+            503: {"model": ErrorResponse, "description": "Model still loading"},
+        },
+        summary="OpenAI-compatible transcription (verbose_json)",
+    )
     async def transcriptions(
         file: UploadFile = File(...),
         model: str = Form(""),

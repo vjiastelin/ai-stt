@@ -74,3 +74,15 @@ def test_job_status_endpoint(client_and_store):
 def test_healthz(client_and_store):
     client, _ = client_and_store
     assert client.get("/healthz").json() == {"status": "ok"}
+
+
+def test_openapi_documents_request_and_response_schemas(client_and_store):
+    client, _ = client_and_store
+    spec = client.get("/openapi.json").json()
+    schemas = spec["components"]["schemas"]
+    assert set(schemas["TranscriptionRequest"]["required"]) == {"CallRecordId", "CallRecordUrl"}
+    assert "JobStatusResponse" in schemas
+    post = spec["paths"]["/requestTranscription"]["post"]
+    assert "400" in post["responses"]
+    ok_schema = post["responses"]["200"]["content"]["application/json"]["schema"]
+    assert ok_schema["$ref"].endswith("AcceptedResponse")

@@ -104,3 +104,13 @@ def test_engine_failure_500(client):
 
     client.app.state.engine = BrokenEngine()
     assert post_wav(client).status_code == 500
+
+
+def test_openapi_documents_response_schemas(client):
+    spec = client.get("/openapi.json").json()
+    schemas = spec["components"]["schemas"]
+    assert set(schemas["SegmentModel"]["required"]) == {"id", "start", "end", "text"}
+    post = spec["paths"]["/v1/audio/transcriptions"]["post"]
+    ok_schema = post["responses"]["200"]["content"]["application/json"]["schema"]
+    assert ok_schema["$ref"].endswith("TranscriptionResponse")
+    assert "401" in post["responses"]
