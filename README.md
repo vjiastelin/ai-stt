@@ -28,8 +28,14 @@ Design spec: `docs/superpowers/specs/2026-07-06-ai-stt-bpm-integration-design.md
     docker compose up --build
 
 First start downloads the Whisper model into the `model-cache` volume.
+On CPU-only hosts, set `DEVICE=cpu` in `.env` (the default is `cuda`).
 A `failed` job (see `GET /jobs/{id}`) is retried by re-POSTing
 `/requestTranscription` with the same `CallRecordId`.
+
+BPM's callback endpoint (`BPM_CALLBACK_URL`) should be idempotent: delivery
+is at-least-once, so the same `{CallRecordId, Summary, FullText}` payload
+may be posted more than once (e.g. after a retry that BPM actually received
+but did not acknowledge with `200`).
 
 ## Develop
 

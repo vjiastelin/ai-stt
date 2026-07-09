@@ -12,6 +12,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from whisper_api.config import ApiConfig
+from whisper_api.engine import InvalidAudioError
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +114,11 @@ def create_app(cfg: ApiConfig, engine_factory: Callable | None) -> FastAPI:
             tmp.flush()
             try:
                 result = await run_in_threadpool(engine.transcribe, tmp.name, language or None)
+            except InvalidAudioError as exc:
+                logger.warning("invalid or undecodable audio: %s", exc)
+                raise HTTPException(
+                    status_code=400, detail=f"invalid or undecodable audio: {exc}"
+                ) from exc
             except Exception as exc:
                 logger.exception("transcription failed")
                 raise HTTPException(status_code=500, detail=f"transcription failed: {exc}") from exc

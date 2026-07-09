@@ -114,6 +114,18 @@ def test_infrastructure_error_propagates_without_counting(env):
 
 
 @respx.mock
+def test_malformed_200_from_whisper_is_infrastructure_not_failed(env):
+    store, worker = env
+    respx.post(WHISPER_URL).mock(return_value=httpx.Response(200, content=b"<html>gateway</html>"))
+    store.enqueue("id-1", "s3://call-records/rec.wav")
+
+    with pytest.raises(InfrastructureError):
+        worker.run_once()
+    job = store.get("id-1")
+    assert (job.status, job.attempts) == ("processing", 0)  # not failed, resumed next cycle
+
+
+@respx.mock
 def test_bpm_down_does_not_block_processing(env):
     store, worker = env
     respx.post(WHISPER_URL).mock(return_value=httpx.Response(200, json=VERBOSE_JSON))

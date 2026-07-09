@@ -152,6 +152,7 @@ DB file lives on a volume (`DB_PATH`). On startup, jobs stuck in `processing`/`d
 | `WHISPER_API_URL` | `http://whisper-api:8000/v1` | Transcription API base URL |
 | `WHISPER_MODEL` | `large-v3` | Model name passed in the request |
 | `WHISPER_TIMEOUT_SECONDS` | `600` | Per-request timeout |
+| `WHISPER_API_KEY` | `""` | Bearer token sent to whisper-api; must match its `API_KEY` when that is set |
 | `LANGUAGE` | `ru` | Transcription language; empty = auto-detect |
 | `SUMMARY_ENABLED` | `true` | `false` → Summary is always `""`, LLM never called |
 | `LLM_API_URL` | — (required if summarization on) | OpenAI-compatible base URL, e.g. `http://vllm:8000/v1` |

@@ -63,3 +63,33 @@ def test_timeout_is_infrastructure(service_config, wav):
     respx.post(URL).mock(side_effect=httpx.ConnectTimeout("boom"))
     with pytest.raises(InfrastructureError):
         transcribe_file(service_config(), wav)
+
+
+@respx.mock
+def test_malformed_200_html_body_is_infrastructure(service_config, wav):
+    respx.post(URL).mock(
+        return_value=httpx.Response(200, content=b"<html>gateway</html>")
+    )
+    with pytest.raises(InfrastructureError):
+        transcribe_file(service_config(), wav)
+
+
+@respx.mock
+def test_malformed_200_wrong_shape_is_infrastructure(service_config, wav):
+    respx.post(URL).mock(return_value=httpx.Response(200, json={"error": "quota"}))
+    with pytest.raises(InfrastructureError):
+        transcribe_file(service_config(), wav)
+
+
+@respx.mock
+def test_authorization_header_sent_when_configured(service_config, wav):
+    route = respx.post(URL).mock(return_value=httpx.Response(200, json=VERBOSE_JSON))
+    transcribe_file(service_config(whisper_api_key="secret"), wav)
+    assert route.calls.last.request.headers["Authorization"] == "Bearer secret"
+
+
+@respx.mock
+def test_authorization_header_absent_by_default(service_config, wav):
+    route = respx.post(URL).mock(return_value=httpx.Response(200, json=VERBOSE_JSON))
+    transcribe_file(service_config(), wav)
+    assert "Authorization" not in route.calls.last.request.headers

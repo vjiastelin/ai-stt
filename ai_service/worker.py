@@ -88,6 +88,11 @@ class Worker:
         started = time.monotonic()
         try:
             bucket, key = s3io.parse_call_record_url(job.call_record_url)
+        except ValueError as exc:  # unparseable URL slipped past API validation
+            self.store.mark_failed(job.call_record_id, str(exc))
+            logger.error("job %s has invalid URL: %s", job.call_record_id, exc)
+            return
+        try:
             with tempfile.TemporaryDirectory() as tmp:
                 wav_path = Path(tmp) / "audio.wav"
                 s3io.download(self.s3, bucket, key, wav_path)
@@ -96,10 +101,6 @@ class Worker:
             summary = summarize.summarize(self.cfg, formats.to_plain_text(result.segments))
         except InfrastructureError:
             raise
-        except ValueError as exc:  # unparseable URL slipped past API validation
-            self.store.mark_failed(job.call_record_id, str(exc))
-            logger.error("job %s has invalid URL: %s", job.call_record_id, exc)
-            return
         except PermanentJobError as exc:
             attempts = self.store.increment_attempts(job.call_record_id, str(exc))
             if attempts >= self.cfg.max_retries:

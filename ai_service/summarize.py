@@ -35,4 +35,7 @@ def summarize(cfg: ServiceConfig, transcript_text: str) -> str:
     if response.status_code >= 400:
         raise PermanentJobError(f"LLM returned {response.status_code}: {response.text[:500]}")
 
-    return response.json()["choices"][0]["message"]["content"].strip()
+    try:
+        return response.json()["choices"][0]["message"]["content"].strip()
+    except (ValueError, KeyError, TypeError, IndexError) as exc:
+        raise InfrastructureError(f"LLM returned malformed 200 response: {exc}") from exc

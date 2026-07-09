@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from whisper_api.app import create_app
 from whisper_api.config import ApiConfig
-from whisper_api.engine import EngineResult
+from whisper_api.engine import EngineResult, InvalidAudioError
 
 
 class FakeEngine:
@@ -104,6 +104,17 @@ def test_engine_failure_500(client):
 
     client.app.state.engine = BrokenEngine()
     assert post_wav(client).status_code == 500
+
+
+def test_invalid_audio_400(client):
+    class CorruptAudioEngine:
+        def transcribe(self, audio_path, language):
+            raise InvalidAudioError("bad data")
+
+    client.app.state.engine = CorruptAudioEngine()
+    response = post_wav(client)
+    assert response.status_code == 400
+    assert "bad data" in response.json()["detail"]
 
 
 def test_openapi_documents_response_schemas(client):

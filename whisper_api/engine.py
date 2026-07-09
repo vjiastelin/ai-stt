@@ -3,6 +3,14 @@ import threading
 from dataclasses import dataclass
 
 
+class InvalidAudioError(Exception):
+    """The input could not be decoded as audio (corrupt/unsupported file)."""
+
+
+def _is_decode_error(exc: BaseException) -> bool:
+    return type(exc).__module__.split(".")[0] == "av"
+
+
 @dataclass(frozen=True)
 class EngineResult:
     language: str
@@ -21,11 +29,18 @@ class Engine:
 
     def transcribe(self, audio_path: str, language: str | None) -> EngineResult:
         with self._lock:  # one model instance: serialize concurrent requests
-            segments_iter, info = self._model.transcribe(audio_path, language=language or None)
-            segments = [
-                {"id": i, "start": float(seg.start), "end": float(seg.end), "text": seg.text}
-                for i, seg in enumerate(segments_iter)
-            ]
+            try:
+                segments_iter, info = self._model.transcribe(audio_path, language=language or None)
+                segments = [
+                    {"id": i, "start": float(seg.start), "end": float(seg.end), "text": seg.text}
+                    for i, seg in enumerate(segments_iter)
+                ]
+            except Exception as exc:
+                # PyAV raises for corrupt/undecodable input; can surface lazily
+                # during segment iteration, not just on the initial call.
+                if _is_decode_error(exc):
+                    raise InvalidAudioError(str(exc)) from exc
+                raise
         return EngineResult(
             language=info.language,
             duration=float(info.duration),

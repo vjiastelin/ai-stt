@@ -61,3 +61,17 @@ def test_5xx_and_timeout_are_infrastructure(service_config):
     respx.post(URL).mock(side_effect=httpx.ConnectTimeout("boom"))
     with pytest.raises(InfrastructureError):
         summarize(service_config(), "текст")
+
+
+@respx.mock
+def test_malformed_200_html_body_is_infrastructure(service_config):
+    respx.post(URL).mock(return_value=httpx.Response(200, content=b"<html>gateway</html>"))
+    with pytest.raises(InfrastructureError):
+        summarize(service_config(), "текст")
+
+
+@respx.mock
+def test_malformed_200_wrong_shape_is_infrastructure(service_config):
+    respx.post(URL).mock(return_value=httpx.Response(200, json={"error": "quota"}))
+    with pytest.raises(InfrastructureError):
+        summarize(service_config(), "текст")

@@ -13,6 +13,7 @@ def service_config(tmp_path):
             whisper_api_url="http://whisper-api:8000/v1",
             whisper_model="large-v3",
             whisper_timeout_seconds=5,
+            whisper_api_key="",
             language="ru",
             summary_enabled=True,
             llm_api_url="http://llm:8000/v1",

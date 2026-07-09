@@ -20,12 +20,16 @@ def transcribe_file(cfg: ServiceConfig, wav_path: Path) -> Transcription:
     data = {"model": cfg.whisper_model, "response_format": "verbose_json"}
     if cfg.language:
         data["language"] = cfg.language
+    headers = {}
+    if cfg.whisper_api_key:
+        headers["Authorization"] = f"Bearer {cfg.whisper_api_key}"
     try:
         with wav_path.open("rb") as fh:
             response = httpx.post(
                 f"{cfg.whisper_api_url}/audio/transcriptions",
                 files={"file": (wav_path.name, fh, "audio/wav")},
                 data=data,
+                headers=headers,
                 timeout=cfg.whisper_timeout_seconds,
             )
     except httpx.HTTPError as exc:
@@ -38,13 +42,18 @@ def transcribe_file(cfg: ServiceConfig, wav_path: Path) -> Transcription:
             f"whisper-api returned {response.status_code}: {response.text[:500]}"
         )
 
-    payload = response.json()
-    segments = [
-        Segment(id=i, start=float(seg["start"]), end=float(seg["end"]), text=seg["text"])
-        for i, seg in enumerate(payload.get("segments", []))
-    ]
-    return Transcription(
-        language=payload.get("language", cfg.language),
-        duration=float(payload.get("duration", 0.0)),
-        segments=segments,
-    )
+    try:
+        payload = response.json()
+        segments = [
+            Segment(id=i, start=float(seg["start"]), end=float(seg["end"]), text=seg["text"])
+            for i, seg in enumerate(payload["segments"])
+        ]
+        return Transcription(
+            language=payload["language"],
+            duration=float(payload["duration"]),
+            segments=segments,
+        )
+    except (ValueError, KeyError, TypeError, IndexError) as exc:
+        raise InfrastructureError(
+            f"whisper-api returned malformed 200 response: {exc}"
+        ) from exc

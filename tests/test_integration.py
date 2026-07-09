@@ -4,7 +4,6 @@ import threading
 import time
 
 import boto3
-import pytest
 import uvicorn
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
