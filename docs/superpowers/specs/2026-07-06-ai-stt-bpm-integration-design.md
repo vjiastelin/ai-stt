@@ -234,6 +234,7 @@ Errors: `400` bad/empty audio, `401` bad key, `422` unsupported parameters, `503
 ## 5. Deployment
 
 - **Two Dockerfiles:** `ai-service` on `python:3.11-slim`; `whisper-api` on an `nvidia/cuda` runtime base (also runs fine on CPU-only hosts — CUDA libs are simply unused when `DEVICE=cpu`).
+- **Builds** install dependencies with `uv sync --frozen` from a committed `uv.lock` (deps installed before source is copied) — reproducible images, and a code-only change reuses the cached dependency layer instead of reinstalling faster-whisper/etc. Changing `pyproject.toml` deps requires regenerating `uv.lock`.
 - **docker-compose.yml:** both services on one network. `whisper-api` has a model-cache volume; the GPU reservation block is included but commented, with a note: enable it for `DEVICE=cuda`, leave commented for CPU-only hosts. `ai-service` has a `/data` volume for SQLite and is healthcheck-gated on `whisper-api`. The LLM endpoint is external and referenced only via `LLM_API_URL`.
 - `.env.example` documents every variable from §3.4/§4.2.
 - Logging: structured single-line logs to stdout in both services (CallRecordId, stage durations: download/transcribe/summarize/callback). Metrics are out of scope for v1.

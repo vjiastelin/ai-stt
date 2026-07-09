@@ -49,3 +49,11 @@ but did not acknowledge with `200`).
     .venv/bin/pytest            # fast suite (no model download)
     .venv/bin/pip install faster-whisper
     .venv/bin/pytest -m slow    # real tiny-model tests
+
+Docker images install dependencies from a committed `uv.lock` with
+`uv sync --frozen`, so builds are reproducible and a code-only change reuses
+the cached dependency layer. **After changing dependencies in
+`pyproject.toml`, regenerate the lock** (otherwise `--frozen` fails the build):
+
+    docker run --rm -v "$PWD":/app -w /app --entrypoint sh \
+      python:3.11-slim -c "pip install -q uv && uv lock"
