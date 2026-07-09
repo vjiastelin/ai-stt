@@ -57,3 +57,25 @@ the cached dependency layer. **After changing dependencies in
 
     docker run --rm -v "$PWD":/app -w /app --entrypoint sh \
       python:3.11-slim -c "pip install -q uv && uv lock"
+
+### WER accuracy test
+
+`tests/whisper_api/test_wer.py` measures Word/Char Error Rate of the production
+model against real speech clips. The word-level helper tests run in the fast
+suite; the real-transcription test is `slow` and auto-discovers `<name>.mp3` +
+`<name>.txt` (UTF-8 transcript) pairs under `tests/fixtures/wer/`, skipping when
+none are present. It **reports** WER/CER (run with `-s` to see them) — no gate.
+
+Run it in the `whisper-api` container for environment parity (CUDA + cuDNN +
+faster-whisper are already installed, `large-v3` on `cuda`/`float16`, and the
+model cache is reused). Two wrinkles: `.dockerignore` keeps `tests/` out of the
+image, so mount it at runtime; and the image is built `--no-dev`, so layer the
+dev deps on with `uv run` (needs network to fetch pytest/jiwer):
+
+    # uncomment the GPU `deploy:` block in docker-compose.yml first
+    docker compose run --rm -v "$PWD/tests:/app/tests" whisper-api \
+      uv run --extra api --extra dev pytest tests/whisper_api/test_wer.py -m slow -s
+
+To run locally instead (CPU `large-v3`, much slower), install faster-whisper
+into the venv (`.venv/bin/pip install faster-whisper`) and edit the `DEVICE` /
+`COMPUTE_TYPE` constants at the top of the test if needed.

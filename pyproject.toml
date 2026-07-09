@@ -20,6 +20,7 @@ dev = [
     "pytest>=8",
     "moto[s3]>=5",
     "respx>=0.21",
+    "jiwer>=3",
 ]
 
 [tool.setuptools]
