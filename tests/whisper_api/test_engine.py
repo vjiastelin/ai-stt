@@ -29,3 +29,31 @@ def test_engine_transcribes_real_wav(tmp_path):
     for seg in result.segments:
         assert set(seg) == {"id", "start", "end", "text"}
     assert result.text == "".join(s["text"] for s in result.segments).strip()
+
+
+def test_engine_passes_vad_and_conditioning_options(monkeypatch, tmp_path):
+    import sys
+    from types import SimpleNamespace
+
+    captured = {}
+
+    class FakeWhisperModel:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def transcribe(self, path, **kwargs):
+            captured.update(kwargs)
+            return iter([]), SimpleNamespace(language="ru", duration=1.0)
+
+    monkeypatch.setitem(
+        sys.modules, "faster_whisper", SimpleNamespace(WhisperModel=FakeWhisperModel)
+    )
+    from whisper_api.engine import Engine
+
+    engine = Engine("tiny", "cpu", "int8", vad_filter=True, condition_on_previous_text=False)
+    result = engine.transcribe("call.mp3", language="ru")
+
+    assert captured["vad_filter"] is True
+    assert captured["condition_on_previous_text"] is False
+    assert captured["language"] == "ru"
+    assert result.segments == []

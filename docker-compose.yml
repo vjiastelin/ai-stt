@@ -7,6 +7,8 @@ services:
       WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
       DEVICE: ${DEVICE:-cuda}
       COMPUTE_TYPE: ${COMPUTE_TYPE:-}
+      VAD_FILTER: ${VAD_FILTER:-true}
+      CONDITION_ON_PREVIOUS_TEXT: ${CONDITION_ON_PREVIOUS_TEXT:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       API_KEY: ${WHISPER_API_KEY:-}
     volumes:

@@ -23,3 +23,15 @@ def test_explicit_compute_type_wins():
 def test_overrides():
     cfg = load_config({"WHISPER_MODEL": "tiny", "DEVICE": "cpu", "PORT": "9001"})
     assert (cfg.model, cfg.device, cfg.port) == ("tiny", "cpu", 9001)
+
+
+def test_vad_and_conditioning_defaults():
+    cfg = load_config({})
+    assert cfg.vad_filter is True
+    assert cfg.condition_on_previous_text is False
+
+
+def test_vad_and_conditioning_overrides():
+    cfg = load_config({"VAD_FILTER": "false", "CONDITION_ON_PREVIOUS_TEXT": "true"})
+    assert cfg.vad_filter is False
+    assert cfg.condition_on_previous_text is True

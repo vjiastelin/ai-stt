@@ -199,6 +199,7 @@ Carried over from the previous spec with an explicit **CPU/GPU switch**; summari
 - Loads the configured faster-whisper model **once at startup** in a background thread; `/healthz` returns `503` until loaded, `200 {"status": "ok", "model": "..."}` after.
 - `DEVICE=cuda` (GPU) or `DEVICE=cpu` — the service is fully functional on CPU, just slower; `COMPUTE_TYPE` defaults accordingly (`float16` for cuda, `int8` for cpu).
 - Requests are transcribed **sequentially** (a lock serializes model access; transcription runs in a thread pool so health checks stay responsive). Single uvicorn worker.
+- **Call-recording transcription defaults:** Silero VAD (`vad_filter`, on) skips silence/hold music/IVR — the main source of Whisper hallucinations on phone audio — and `condition_on_previous_text` (off) prevents repetition loops on noisy recordings. Both are env-toggleable (§4.2).
 - Stateless: audio processed from the uploaded bytes, nothing persisted.
 
 ### 4.2 Configuration (environment variables)
@@ -208,6 +209,8 @@ Carried over from the previous spec with an explicit **CPU/GPU switch**; summari
 | `WHISPER_MODEL` | `large-v3` | faster-whisper model (cached on a volume) |
 | `DEVICE` | `cuda` | `cuda` or `cpu` |
 | `COMPUTE_TYPE` | `""` (auto) | empty → `float16` if `DEVICE=cuda`, `int8` if `cpu`; any explicit CTranslate2 value overrides |
+| `VAD_FILTER` | `true` | Silero VAD trims non-speech before transcription |
+| `CONDITION_ON_PREVIOUS_TEXT` | `false` | Cross-window conditioning; off avoids repetition loops on phone audio |
 | `API_KEY` | `""` | If set, requests must send `Authorization: Bearer <key>` |
 | `PORT` | `8000` | Listen port |
 | `LOG_LEVEL` | `INFO` | |

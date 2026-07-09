@@ -16,7 +16,13 @@ def main() -> None:
     def engine_factory():
         from whisper_api.engine import Engine
 
-        return Engine(cfg.model, cfg.device, cfg.compute_type)
+        return Engine(
+            cfg.model,
+            cfg.device,
+            cfg.compute_type,
+            vad_filter=cfg.vad_filter,
+            condition_on_previous_text=cfg.condition_on_previous_text,
+        )
 
     app = create_app(cfg, engine_factory)
     uvicorn.run(app, host="0.0.0.0", port=cfg.port, log_level=cfg.log_level.lower())
