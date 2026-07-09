@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.wer import cer, normalize, wer
+from tests.wer import alignment, cer, normalize, wer
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "wer"
 
@@ -74,6 +74,7 @@ def test_wer_against_fixtures():
         cers.append(c)
         line = f"{mp3.name}: WER={w:.3f} CER={c:.3f}"
         print(line)
+        print(alignment(reference, result.text))
         logger.info(line)
 
     summary = (

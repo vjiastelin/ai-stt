@@ -43,3 +43,14 @@ def cer(reference: str, hypothesis: str) -> float:
         reference_transform=_CHARS,
         hypothesis_transform=_CHARS,
     )
+
+
+def alignment(reference: str, hypothesis: str) -> str:
+    """Word-level ref/hyp alignment showing each S/D/I error (for diagnosis)."""
+    out = jiwer.process_words(
+        reference,
+        hypothesis,
+        reference_transform=_WORDS,
+        hypothesis_transform=_WORDS,
+    )
+    return jiwer.visualize_alignment(out, skip_correct=True)
