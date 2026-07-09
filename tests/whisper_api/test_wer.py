@@ -17,7 +17,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "wer"
 # Edit these for a faster/cheaper local run (e.g. "tiny"/"int8").
 MODEL = "large-v3"
 DEVICE = "cpu"
-COMPUTE_TYPE = "float32"
+COMPUTE_TYPE = "int8"
 LANGUAGE = "ru"
 
 logger = logging.getLogger(__name__)
