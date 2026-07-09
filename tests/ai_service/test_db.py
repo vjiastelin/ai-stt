@@ -67,3 +67,28 @@ def test_survives_reopen(store, tmp_path):
     reopened = JobStore(str(tmp_path / "jobs.db"))
     job = reopened.get("id-1")
     assert (job.status, job.full_text, job.summary) == ("delivering", "текст", "суть")
+
+
+def test_list_jobs_returns_all_newest_first(store):
+    store.enqueue("id-1", "s3://b/1.wav")
+    store.enqueue("id-2", "s3://b/2.wav")
+    store.enqueue("id-3", "s3://b/3.wav")
+    jobs = store.list_jobs()
+    assert [j.call_record_id for j in jobs] == ["id-3", "id-2", "id-1"]
+
+
+def test_list_jobs_filters_by_status(store):
+    store.enqueue("id-1", "s3://b/1.wav")
+    store.enqueue("id-2", "s3://b/2.wav")
+    store.set_status("id-2", "done")
+    assert [j.call_record_id for j in store.list_jobs(status="done")] == ["id-2"]
+    assert [j.call_record_id for j in store.list_jobs(status="queued")] == ["id-1"]
+
+
+def test_list_jobs_limit_and_offset(store):
+    for i in range(5):
+        store.enqueue(f"id-{i}", f"s3://b/{i}.wav")
+    page1 = store.list_jobs(limit=2, offset=0)
+    page2 = store.list_jobs(limit=2, offset=2)
+    assert [j.call_record_id for j in page1] == ["id-4", "id-3"]
+    assert [j.call_record_id for j in page2] == ["id-2", "id-1"]

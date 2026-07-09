@@ -106,6 +106,20 @@ class JobStore:
             ).fetchall()
             return [self._row_to_job(row) for row in rows]
 
+    def list_jobs(
+        self, status: str | None = None, limit: int = 50, offset: int = 0
+    ) -> list[Job]:
+        """Newest-first listing, optionally filtered by status (for diagnostics)."""
+        clause = "WHERE status = ?" if status else ""
+        params: tuple = (status,) if status else ()
+        with self._lock:
+            rows = self._conn.execute(
+                f"SELECT * FROM jobs {clause}"
+                " ORDER BY created_at DESC, call_record_id DESC LIMIT ? OFFSET ?",
+                (*params, limit, offset),
+            ).fetchall()
+            return [self._row_to_job(row) for row in rows]
+
     def set_status(self, call_record_id: str, status: str) -> None:
         with self._lock:
             self._update(call_record_id, status=status)

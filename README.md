@@ -10,7 +10,10 @@ Two services:
   `POST /requestTranscription` (`CallRecordId`, `CallRecordUrl`) → 200 accepted;
   result is delivered to `BPM_CALLBACK_URL` as
   `{CallRecordId, Summary, FullText}` (retried until BPM answers 200).
-  `GET /jobs/{CallRecordId}` shows job status; `GET /healthz` liveness.
+  Inspection endpoints: `GET /jobs` (list, newest first, `?status=` filter +
+  `limit`/`offset`), `GET /jobs/{CallRecordId}` (status), and
+  `GET /jobs/{CallRecordId}/result` (the `Summary` and `FullText`).
+  `GET /healthz` liveness.
 - **whisper-api** — FastAPI + faster-whisper (GPU or CPU, `DEVICE=cuda|cpu`),
   OpenAI-compatible `POST /v1/audio/transcriptions`.
 

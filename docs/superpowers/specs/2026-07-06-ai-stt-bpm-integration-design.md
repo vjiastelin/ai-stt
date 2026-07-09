@@ -101,6 +101,16 @@ Request body (JSON):
 Diagnostics (the flow has no failure callback, so this is the visibility mechanism):
 `200 {"CallRecordId": "...", "status": "queued|processing|delivering|done|failed", "attempts": 1, "error": null, "created_at": "...", "updated_at": "..."}` or `404`.
 
+#### `GET /jobs/{CallRecordId}/result`
+
+The transcript and summary of a job (empty strings until it reaches `delivering`/`done`):
+`200 {"CallRecordId": "...", "status": "...", "Summary": "...", "FullText": "[00:00:00] ..."}` or `404`.
+
+#### `GET /jobs`
+
+List jobs, newest first, for diagnostics. Query params: `status` (optional filter over the five states), `limit` (1–500, default 50), `offset` (default 0).
+`200 {"count": N, "jobs": [ {status object}, ... ]}`.
+
 #### `GET /healthz`
 
 `200 {"status": "ok"}` when the API and DB are up (does not depend on whisper-api/LLM availability).

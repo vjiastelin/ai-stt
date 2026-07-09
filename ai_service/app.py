@@ -2,7 +2,7 @@
 import logging
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -41,12 +41,38 @@ class JobStatusResponse(BaseModel):
     updated_at: str
 
 
+JobState = Literal["queued", "processing", "delivering", "done", "failed"]
+
+
+class JobResultResponse(BaseModel):
+    CallRecordId: str
+    status: JobState
+    Summary: str = Field(description="Empty until the job reaches delivering/done")
+    FullText: str = Field(description="Transcript with [HH:MM:SS] timecodes; empty until processed")
+
+
+class JobListResponse(BaseModel):
+    count: int
+    jobs: list[JobStatusResponse]
+
+
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
 
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+def _job_status_response(job) -> "JobStatusResponse":
+    return JobStatusResponse(
+        CallRecordId=job.call_record_id,
+        status=job.status,
+        attempts=job.attempts,
+        error=job.error,
+        created_at=job.created_at,
+        updated_at=job.updated_at,
+    )
 
 
 def create_app(cfg: ServiceConfig, store: JobStore) -> FastAPI:
@@ -86,6 +112,20 @@ def create_app(cfg: ServiceConfig, store: JobStore) -> FastAPI:
         return AcceptedResponse(CallRecordId=call_record_id)
 
     @app.get(
+        "/jobs",
+        response_model=JobListResponse,
+        responses={400: {"model": ErrorResponse, "description": "Invalid status filter"}},
+        summary="List jobs, newest first (diagnostics)",
+    )
+    def list_jobs(
+        status: JobState | None = None,
+        limit: int = Query(50, ge=1, le=500),
+        offset: int = Query(0, ge=0),
+    ):
+        jobs = store.list_jobs(status=status, limit=limit, offset=offset)
+        return JobListResponse(count=len(jobs), jobs=[_job_status_response(j) for j in jobs])
+
+    @app.get(
         "/jobs/{call_record_id}",
         response_model=JobStatusResponse,
         responses={404: {"model": ErrorResponse, "description": "Unknown CallRecordId"}},
@@ -95,13 +135,23 @@ def create_app(cfg: ServiceConfig, store: JobStore) -> FastAPI:
         job = store.get(call_record_id)
         if job is None:
             raise HTTPException(status_code=404, detail="no such job")
-        return JobStatusResponse(
+        return _job_status_response(job)
+
+    @app.get(
+        "/jobs/{call_record_id}/result",
+        response_model=JobResultResponse,
+        responses={404: {"model": ErrorResponse, "description": "Unknown CallRecordId"}},
+        summary="Transcript (FullText) and Summary of a job",
+    )
+    def job_result(call_record_id: str):
+        job = store.get(call_record_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="no such job")
+        return JobResultResponse(
             CallRecordId=job.call_record_id,
             status=job.status,
-            attempts=job.attempts,
-            error=job.error,
-            created_at=job.created_at,
-            updated_at=job.updated_at,
+            Summary=job.summary or "",
+            FullText=job.full_text or "",
         )
 
     @app.get("/healthz", response_model=HealthResponse, summary="Liveness probe")

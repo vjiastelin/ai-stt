@@ -86,3 +86,59 @@ def test_openapi_documents_request_and_response_schemas(client_and_store):
     assert "400" in post["responses"]
     ok_schema = post["responses"]["200"]["content"]["application/json"]["schema"]
     assert ok_schema["$ref"].endswith("AcceptedResponse")
+
+
+def test_job_result_returns_summary_and_fulltext(client_and_store):
+    client, store = client_and_store
+    store.enqueue("id-1", "s3://bucket/rec.wav")
+    store.set_result("id-1", "[00:00:00] привет мир", "краткое содержание")
+    response = client.get("/jobs/id-1/result")
+    assert response.status_code == 200
+    assert response.json() == {
+        "CallRecordId": "id-1",
+        "status": "delivering",
+        "Summary": "краткое содержание",
+        "FullText": "[00:00:00] привет мир",
+    }
+
+
+def test_job_result_empty_before_processing(client_and_store):
+    client, store = client_and_store
+    store.enqueue("id-1", "s3://bucket/rec.wav")
+    response = client.get("/jobs/id-1/result")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "queued"
+    assert body["Summary"] == ""
+    assert body["FullText"] == ""
+
+
+def test_job_result_404_for_unknown(client_and_store):
+    client, _ = client_and_store
+    assert client.get("/jobs/nope/result").status_code == 404
+
+
+def test_list_jobs_endpoint(client_and_store):
+    client, store = client_and_store
+    store.enqueue("id-1", "s3://b/1.wav")
+    store.enqueue("id-2", "s3://b/2.wav")
+    store.set_status("id-2", "done")
+    body = client.get("/jobs").json()
+    assert body["count"] == 2
+    assert [j["CallRecordId"] for j in body["jobs"]] == ["id-2", "id-1"]
+    assert body["jobs"][0]["status"] == "done"
+
+
+def test_list_jobs_endpoint_status_filter(client_and_store):
+    client, store = client_and_store
+    store.enqueue("id-1", "s3://b/1.wav")
+    store.enqueue("id-2", "s3://b/2.wav")
+    store.set_status("id-2", "done")
+    body = client.get("/jobs?status=done").json()
+    assert body["count"] == 1
+    assert body["jobs"][0]["CallRecordId"] == "id-2"
+
+
+def test_list_jobs_endpoint_rejects_bad_status(client_and_store):
+    client, _ = client_and_store
+    assert client.get("/jobs?status=bogus").status_code == 400
