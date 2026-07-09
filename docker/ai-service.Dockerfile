@@ -1,10 +1,23 @@
 FROM python:3.11-slim
 
+# uv (pinned; bump the tag to upgrade, or use :latest to float).
+COPY --from=ghcr.io/astral-sh/uv:0.8 /uv /uvx /bin/
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=0
+
 WORKDIR /app
-COPY pyproject.toml ./
-COPY ai_service ./ai_service
-COPY whisper_api ./whisper_api
-RUN pip install --no-cache-dir .[service]
+
+# 1) Dependency layer — rebuilt only when pyproject.toml / uv.lock change.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project --extra service
+
+# 2) Project layer — cheap; only re-runs on a code change.
+COPY . .
+RUN uv sync --frozen --no-dev --extra service
+
+ENV PATH="/app/.venv/bin:$PATH"
 
 VOLUME /data
 EXPOSE 8080
