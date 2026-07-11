@@ -10,7 +10,7 @@ from ai_service.db import JobStore
 from ai_service.errors import InfrastructureError
 from ai_service.worker import Backoff, Worker
 
-WHISPER_URL = "http://whisper-api:8000/v1/audio/transcriptions"
+WHISPER_URL = "http://whisper-api:8000/v1/chat/completions"
 LLM_URL = "http://llm:8000/v1/chat/completions"
 BPM_URL = "http://bpm/onTranscriptionComplete"
 

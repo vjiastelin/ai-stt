@@ -76,7 +76,7 @@ Two services developed in this repo, plus one external dependency:
 ```
 
 - **`ai-service`** — FastAPI app + SQLite-backed job queue + single background worker. Owns all integration: BPM API, S3 download, Whisper call, LLM call, callback delivery. No GPU, no ML dependencies (`fastapi`, `uvicorn`, `boto3`, `httpx`).
-- **`whisper-api`** — REST service wrapping **faster-whisper**, runs on **GPU or CPU** (`DEVICE=cuda|cpu`). Exposes the OpenAI-compatible `POST /v1/audio/transcriptions` endpoint. Unchanged role from the previous spec.
+- **`whisper-api`** — REST service wrapping **faster-whisper**, runs on **GPU or CPU** (`DEVICE=cuda|cpu`). Exposes the transcription endpoint at `POST /v1/chat/completions` (the OpenAI `verbose_json` transcription contract, served on the chat/completions path — not the OpenAI chat schema). Unchanged role from the previous spec.
 - **LLM** — any OpenAI-compatible `/v1/chat/completions` endpoint (self-hosted vLLM/Ollama). Running it is **out of scope**; only its URL/model/key are configured. Not needed when summarization is disabled.
 - No auth on `/requestTranscription` and the callback — trusted internal network (v1).
 
@@ -140,7 +140,7 @@ DB file lives on a volume (`DB_PATH`). On startup, jobs stuck in `processing`/`d
 
 1. Take the oldest `queued` job → status `processing`.
 2. Parse `CallRecordUrl` → bucket/key; download the MP3 via boto3 (configured endpoint + credentials) to a temp file.
-3. `POST {WHISPER_API_URL}/audio/transcriptions` (multipart: file, `model`, `language`, `response_format=verbose_json`) → segments with start/end times.
+3. `POST {WHISPER_API_URL}/chat/completions` (multipart: file, `model`, `language`, `response_format=verbose_json`) → segments with start/end times.
 4. Build **FullText** — one line per segment with a timecode:
    ```
    [00:00:00] Добрый день, компания Аэроклуб.
@@ -211,13 +211,17 @@ Carried over from the previous spec with an explicit **CPU/GPU switch**; summari
 | `COMPUTE_TYPE` | `""` (auto) | empty → `float16` if `DEVICE=cuda`, `int8` if `cpu`; any explicit CTranslate2 value overrides |
 | `VAD_FILTER` | `true` | Silero VAD trims non-speech before transcription |
 | `CONDITION_ON_PREVIOUS_TEXT` | `false` | Cross-window conditioning; off avoids repetition loops on phone audio |
+| `TRANSCRIBE_OPTIONS` | `""` (none) | JSON object of faster-whisper `transcribe()` options, merged over the tuned defaults (e.g. `{"beam_size":5,"temperature":0}`); a supplied `vad_parameters` replaces the default one wholesale. Invalid JSON / non-object fails startup |
 | `API_KEY` | `""` | If set, requests must send `Authorization: Bearer <key>` |
 | `PORT` | `8000` | Listen port |
+| `SSL_CERTFILE` | `""` | TLS cert path; set together with `SSL_KEYFILE` to serve HTTPS (else plain HTTP) |
+| `SSL_KEYFILE` | `""` | TLS private-key path (paired with `SSL_CERTFILE`) |
+| `SSL_KEYFILE_PASSWORD` | `""` | Optional passphrase for an encrypted `SSL_KEYFILE` |
 | `LOG_LEVEL` | `INFO` | |
 
 ### 4.3 API contract
 
-`POST /v1/audio/transcriptions` — OpenAI-compatible (subset): multipart `file`, `model`, `language` (optional), `response_format=verbose_json`. Response:
+`POST /v1/chat/completions` — the transcription endpoint (OpenAI `verbose_json` transcription contract served on the chat/completions path, not the OpenAI chat schema): multipart `file`, `model`, `language` (optional), `response_format=verbose_json`. Response:
 
 ```json
 {
@@ -257,7 +261,7 @@ ai-stt/
 ├── whisper_api/
 │   ├── __main__.py      # uvicorn entrypoint
 │   ├── config.py        # env parsing (incl. COMPUTE_TYPE auto-resolution)
-│   ├── app.py           # FastAPI app: /v1/audio/transcriptions, /healthz, auth
+│   ├── app.py           # FastAPI app: /v1/chat/completions, /healthz, auth
 │   └── engine.py        # faster-whisper wrapper: load once, serialized transcribe
 ├── tests/
 │   ├── ai_service/

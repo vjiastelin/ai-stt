@@ -47,3 +47,11 @@ in anything downstream that attributes statements to a named speaker.
 Rule of thumb for spontaneous phone Russian scored against a cleaned reference:
 WER in the 25–40% range is normal; trust CER + the deletion count as the real
 accuracy signal. Run with `-s` to see the per-fixture word-level alignment.
+
+## Performance test
+
+`tests/whisper_api/test_perf.py::test_transcription_rtf_against_fixtures`
+reuses the same `*.mp3` files (no `.txt` needed) and reports the real-time
+factor (RTF = transcription wall time / audio duration; RTF < 1 is faster than
+real-time). Like the WER test it is `slow` and report-only. Run with `-s` to
+see the per-file RTF and the `[PERF]` summary.

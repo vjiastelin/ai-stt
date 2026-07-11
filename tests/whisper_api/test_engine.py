@@ -81,3 +81,56 @@ def test_engine_conditioning_defaults_to_true(monkeypatch):
     Engine("tiny", "cpu", "int8").transcribe("call.mp3", language="ru")
 
     assert captured["condition_on_previous_text"] is True
+
+
+def _capture_transcribe_kwargs(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    captured = {}
+
+    class FakeWhisperModel:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def transcribe(self, path, **kwargs):
+            captured.update(kwargs)
+            return iter([]), SimpleNamespace(language="ru", duration=1.0)
+
+    monkeypatch.setitem(
+        sys.modules, "faster_whisper", SimpleNamespace(WhisperModel=FakeWhisperModel)
+    )
+    return captured
+
+
+def test_engine_passes_tuned_defaults(monkeypatch):
+    captured = _capture_transcribe_kwargs(monkeypatch)
+    from whisper_api.engine import Engine
+
+    Engine("tiny", "cpu", "int8").transcribe("call.mp3", language="ru")
+
+    assert captured["beam_size"] == 10
+    assert captured["temperature"] == 0
+    assert captured["no_speech_threshold"] == 0.5
+    assert captured["vad_parameters"] == {
+        "min_silence_duration_ms": 700,
+        "speech_pad_ms": 500,
+    }
+
+
+def test_transcribe_options_override_defaults(monkeypatch):
+    captured = _capture_transcribe_kwargs(monkeypatch)
+    from whisper_api.engine import Engine
+
+    Engine(
+        "tiny",
+        "cpu",
+        "int8",
+        transcribe_options={"beam_size": 3, "vad_parameters": {"speech_pad_ms": 100}},
+    ).transcribe("call.mp3", language="ru")
+
+    assert captured["beam_size"] == 3
+    # a supplied vad_parameters replaces the default dict wholesale
+    assert captured["vad_parameters"] == {"speech_pad_ms": 100}
+    # unrelated defaults still flow through
+    assert captured["no_speech_threshold"] == 0.5

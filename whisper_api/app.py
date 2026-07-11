@@ -84,7 +84,7 @@ def create_app(cfg: ApiConfig, engine_factory: Callable | None) -> FastAPI:
         return {"status": "ok", "model": cfg.model}
 
     @app.post(
-        "/v1/audio/transcriptions",
+        "/v1/chat/completions",
         response_model=TranscriptionResponse,
         responses={
             400: {"model": ErrorResponse, "description": "Empty or missing audio file"},
