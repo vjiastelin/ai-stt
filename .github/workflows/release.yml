@@ -17,11 +17,22 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  # Guard: refuse to release if the git tag and pyproject version disagree.
-  verify-version:
+  # Guards: release only from a tag that (a) sits on the main branch — i.e. the
+  # code was merged via PR — and (b) matches the pyproject version.
+  verify-release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need full history to test ancestry against main
+      - name: Tag must be on the main branch (merged via PR)
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::tag $GITHUB_REF_NAME ($GITHUB_SHA) is not on main; release only from main after a PR merge"
+            exit 1
+          fi
+          echo "OK: $GITHUB_SHA is contained in origin/main"
       - name: Tag must match pyproject version
         run: |
           tag="${GITHUB_REF_NAME#v}"
@@ -33,7 +44,7 @@ jobs:
           fi
 
   build-push:
-    needs: verify-version
+    needs: verify-release
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
