@@ -12,6 +12,22 @@ def _is_decode_error(exc: BaseException) -> bool:
 
 logger = logging.getLogger(__name__)
 
+# Tuned defaults for phone-quality Russian audio. Any of these can be overridden
+# per-deployment via the TRANSCRIBE_OPTIONS env var (see config.py); a supplied
+# `vad_parameters` replaces this default dict wholesale (shallow merge).
+DEFAULT_TRANSCRIBE_OPTIONS: dict = {
+    "beam_size": 10,
+    "temperature": 0,
+    "compression_ratio_threshold": 2.2,
+    "log_prob_threshold": -1.0,
+    "no_speech_threshold": 0.5,
+    "vad_parameters": {
+        "min_silence_duration_ms": 700,
+        "speech_pad_ms": 500,
+    },
+}
+
+
 @dataclass(frozen=True)
 class EngineResult:
     language: str
@@ -28,14 +44,20 @@ class Engine:
         compute_type: str,
         vad_filter: bool = True,
         condition_on_previous_text: bool = True,
+        transcribe_options: dict | None = None,
     ):
         from faster_whisper import WhisperModel  # lazy: heavy import, needs the `api` extra
 
         self.model_name = model_name
         self._model = WhisperModel(model_name, device=device, compute_type=compute_type)
         self._lock = threading.Lock()
-        self._vad_filter = vad_filter
-        self._condition_on_previous_text = condition_on_previous_text
+        # Effective options: built-in defaults < vad_filter/conditioning < caller overrides.
+        self._options = {
+            **DEFAULT_TRANSCRIBE_OPTIONS,
+            "vad_filter": vad_filter,
+            "condition_on_previous_text": condition_on_previous_text,
+            **(transcribe_options or {}),
+        }
 
     def transcribe(self, audio_path: str, language: str | None) -> EngineResult:
         with self._lock:  # one model instance: serialize concurrent requests
@@ -43,17 +65,7 @@ class Engine:
                 segments_iter, info = self._model.transcribe(
                     audio_path,
                     language=language or None,
-                    beam_size=10,
-                    vad_filter=self._vad_filter,
-                    condition_on_previous_text=self._condition_on_previous_text,
-                    temperature=0,
-                    compression_ratio_threshold=2.2,
-                    log_prob_threshold=-1.0,
-                    no_speech_threshold=0.5,
-                    vad_parameters={
-                        "min_silence_duration_ms": 700,
-                        "speech_pad_ms": 500,
-                    },
+                    **self._options,
                 )
 
                 segments = []
