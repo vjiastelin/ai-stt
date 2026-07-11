@@ -145,8 +145,12 @@ A **FastAPI** service wrapping **faster-whisper** (CTranslate2) on CUDA.
 | `WHISPER_MODEL` | `large-v3` | faster-whisper model name (downloaded to the cache volume on first start) |
 | `DEVICE` | `cuda` | `cuda` or `cpu` |
 | `COMPUTE_TYPE` | `float16` | e.g. `float16` (GPU), `int8` (CPU) |
+| `TRANSCRIBE_OPTIONS` | `""` (none) | JSON object of faster-whisper `transcribe()` options, merged over the defaults (e.g. `{"beam_size":5,"temperature":0}`); invalid JSON / non-object fails startup |
 | `API_KEY` | `""` | If set, requests must send `Authorization: Bearer <key>` |
 | `PORT` | `8000` | Listen port |
+| `SSL_CERTFILE` | `""` | TLS cert path; set together with `SSL_KEYFILE` to serve HTTPS (else plain HTTP) |
+| `SSL_KEYFILE` | `""` | TLS private-key path (paired with `SSL_CERTFILE`) |
+| `SSL_KEYFILE_PASSWORD` | `""` | Optional passphrase for an encrypted `SSL_KEYFILE` |
 | `LOG_LEVEL` | `INFO` | Logging verbosity |
 
 ### 4.3 Error responses

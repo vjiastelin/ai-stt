@@ -211,8 +211,12 @@ Carried over from the previous spec with an explicit **CPU/GPU switch**; summari
 | `COMPUTE_TYPE` | `""` (auto) | empty → `float16` if `DEVICE=cuda`, `int8` if `cpu`; any explicit CTranslate2 value overrides |
 | `VAD_FILTER` | `true` | Silero VAD trims non-speech before transcription |
 | `CONDITION_ON_PREVIOUS_TEXT` | `false` | Cross-window conditioning; off avoids repetition loops on phone audio |
+| `TRANSCRIBE_OPTIONS` | `""` (none) | JSON object of faster-whisper `transcribe()` options, merged over the tuned defaults (e.g. `{"beam_size":5,"temperature":0}`); a supplied `vad_parameters` replaces the default one wholesale. Invalid JSON / non-object fails startup |
 | `API_KEY` | `""` | If set, requests must send `Authorization: Bearer <key>` |
 | `PORT` | `8000` | Listen port |
+| `SSL_CERTFILE` | `""` | TLS cert path; set together with `SSL_KEYFILE` to serve HTTPS (else plain HTTP) |
+| `SSL_KEYFILE` | `""` | TLS private-key path (paired with `SSL_CERTFILE`) |
+| `SSL_KEYFILE_PASSWORD` | `""` | Optional passphrase for an encrypted `SSL_KEYFILE` |
 | `LOG_LEVEL` | `INFO` | |
 
 ### 4.3 API contract
