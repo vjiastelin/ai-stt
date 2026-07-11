@@ -67,7 +67,7 @@ Each polling cycle:
    - `LastModified` is newer than `MIN_FILE_AGE_SECONDS` ago.
 4. **Process** each remaining file, one at a time:
    1. Download the WAV to a temp directory.
-   2. `POST {WHISPER_API_URL}/audio/transcriptions` — multipart form with the WAV file, `model`, `language`, `response_format=verbose_json`; parse segments (start/end/text) from the response.
+   2. `POST {WHISPER_API_URL}/chat/completions` — multipart form with the WAV file, `model`, `language`, `response_format=verbose_json`; parse segments (start/end/text) from the response.
    3. Build the JSON document and SRT text.
    4. Upload the **SRT first, then the JSON** (JSON acts as the completion marker).
    5. Delete the temp file (always, via `finally`).
@@ -158,7 +158,7 @@ A **FastAPI** service wrapping **faster-whisper** (CTranslate2) on CUDA.
 
 ## 5. API contract between the services
 
-`POST {base}/audio/transcriptions` — OpenAI-compatible (subset):
+`POST {base}/chat/completions` — the transcription endpoint (OpenAI `verbose_json` transcription contract on the chat/completions path):
 
 - **Request:** `multipart/form-data` with fields `file` (the WAV), `model`, `language` (optional), `response_format=verbose_json`.
 - **Response `200`** (`verbose_json`):
@@ -201,7 +201,7 @@ ai-stt/
 ├── whisper_api/
 │   ├── __main__.py      # uvicorn entrypoint
 │   ├── config.py        # env parsing/validation
-│   ├── app.py           # FastAPI app: /v1/audio/transcriptions, /healthz, auth
+│   ├── app.py           # FastAPI app: /v1/chat/completions, /healthz, auth
 │   └── engine.py        # faster-whisper wrapper: load once, serialized transcribe
 ├── tests/
 │   ├── worker/
