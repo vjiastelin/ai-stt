@@ -25,5 +25,9 @@ RUN uv sync --frozen --no-dev --extra api --python python3.11
 ENV PATH="/app/.venv/bin:$PATH" \
     HF_HOME=/cache/huggingface
 
+# Entrypoint last so edits to it never invalidate the layers above.
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 8000
-CMD ["python", "-m", "whisper_api"]
+ENTRYPOINT ["/entrypoint.sh"]

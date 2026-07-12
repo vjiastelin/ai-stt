@@ -18,10 +18,14 @@ services:
       SSL_CERTFILE: ${SSL_CERTFILE:-}
       SSL_KEYFILE: ${SSL_KEYFILE:-}
       SSL_KEYFILE_PASSWORD: ${SSL_KEYFILE_PASSWORD:-}
+      # CN of the self-signed cert the entrypoint generates when SSL_CERTFILE/
+      # SSL_KEYFILE are set but no cert is mounted at those paths.
+      DOMAIN: ${DOMAIN:-}
     volumes:
       - model-cache:/cache/huggingface
       # Enable HTTPS: mount your certs and set SSL_CERTFILE/SSL_KEYFILE to the
       # in-container paths, then publish the port so callers can reach it.
+      # Skip the mount to let the entrypoint generate a self-signed pair instead.
       # - ./certs:/certs:ro
     # ports:
     #   - "8000:8000"

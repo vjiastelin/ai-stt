@@ -214,9 +214,10 @@ Carried over from the previous spec with an explicit **CPU/GPU switch**; summari
 | `TRANSCRIBE_OPTIONS` | `""` (none) | JSON object of faster-whisper `transcribe()` options, merged over the tuned defaults (e.g. `{"beam_size":5,"temperature":0}`); a supplied `vad_parameters` replaces the default one wholesale. Invalid JSON / non-object fails startup |
 | `API_KEY` | `""` | If set, requests must send `Authorization: Bearer <key>` |
 | `PORT` | `8000` | Listen port |
-| `SSL_CERTFILE` | `""` | TLS cert path; set together with `SSL_KEYFILE` to serve HTTPS (else plain HTTP) |
+| `SSL_CERTFILE` | `""` | TLS cert path; set together with `SSL_KEYFILE` to serve HTTPS (else plain HTTP). In Docker, if set but no cert exists at the path, the entrypoint generates a self-signed pair there on startup |
 | `SSL_KEYFILE` | `""` | TLS private-key path (paired with `SSL_CERTFILE`) |
 | `SSL_KEYFILE_PASSWORD` | `""` | Optional passphrase for an encrypted `SSL_KEYFILE` |
+| `DOMAIN` | `llm.example.int` | CN of the self-signed cert the Docker entrypoint generates (only used when generation kicks in) |
 | `LOG_LEVEL` | `INFO` | |
 
 ### 4.3 API contract
