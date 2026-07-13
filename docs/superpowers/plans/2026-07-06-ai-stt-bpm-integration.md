@@ -1038,7 +1038,7 @@ import respx
 from ai_service.errors import InfrastructureError, PermanentJobError
 from ai_service.summarize import summarize
 
-URL = "http://llm:8000/v1/chat/completions"
+URL = "http://llm:8000/v1/audio/translations"
 
 CHAT_RESPONSE = {
     "choices": [{"message": {"role": "assistant", "content": " Клиент уточнил бронь.\n"}}]

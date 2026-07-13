@@ -5,7 +5,7 @@ import respx
 from ai_service.errors import InfrastructureError, PermanentJobError
 from ai_service.transcribe import transcribe_file
 
-URL = "http://whisper-api:8000/v1/chat/completions"
+URL = "http://whisper-api:8000/v1/audio/translations"
 
 VERBOSE_JSON = {
     "task": "transcribe",

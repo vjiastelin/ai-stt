@@ -17,7 +17,7 @@ Two services:
   `GET /jobs/{CallRecordId}/result` (the `Summary` and `FullText`).
   `GET /healthz` liveness.
 - **whisper-api** — FastAPI + faster-whisper (GPU or CPU, `DEVICE=cuda|cpu`),
-  OpenAI-compatible transcription at `POST /v1/chat/completions` (multipart
+  OpenAI-compatible transcription at `POST /v1/audio/translations` (multipart
   upload → `verbose_json` with timecoded segments). Decode options are tunable
   via `TRANSCRIBE_OPTIONS` (JSON), and it can serve HTTPS via `SSL_CERTFILE`/
   `SSL_KEYFILE` — see `.env.example`.
