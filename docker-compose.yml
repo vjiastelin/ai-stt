@@ -1,64 +1,16 @@
 services:
-  whisper-api:
-    build:
-      context: .
-      dockerfile: docker/whisper-api.Dockerfile
-    environment:
-      WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
-      DEVICE: ${DEVICE:-cuda}
-      COMPUTE_TYPE: ${COMPUTE_TYPE:-}
-      VAD_FILTER: ${VAD_FILTER:-true}
-      CONDITION_ON_PREVIOUS_TEXT: ${CONDITION_ON_PREVIOUS_TEXT:-true}
-      # Open JSON object of faster-whisper transcribe options, merged over the
-      # tuned defaults (e.g. '{"beam_size":5,"temperature":0}'). Empty = defaults.
-      TRANSCRIBE_OPTIONS: ${TRANSCRIBE_OPTIONS:-}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      API_KEY: ${WHISPER_API_KEY:-}
-      # Optional TLS — set both to serve HTTPS (see the commented certs mount below).
-      SSL_CERTFILE: ${SSL_CERTFILE:-}
-      SSL_KEYFILE: ${SSL_KEYFILE:-}
-      SSL_KEYFILE_PASSWORD: ${SSL_KEYFILE_PASSWORD:-}
-      # CN of the self-signed cert the entrypoint generates when SSL_CERTFILE/
-      # SSL_KEYFILE are set but no cert is mounted at those paths.
-      DOMAIN: ${DOMAIN:-}
-    volumes:
-      - model-cache:/cache/huggingface
-      # Enable HTTPS: mount your certs and set SSL_CERTFILE/SSL_KEYFILE to the
-      # in-container paths, then publish the port so callers can reach it.
-      # Skip the mount to let the entrypoint generate a self-signed pair instead.
-      # - ./certs:/certs:ro
-    # ports:
-    #   - "8000:8000"
-    healthcheck:
-      # If you force HTTPS, switch this probe to https:// and add ssl._create_unverified_context.
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
-      interval: 15s
-      timeout: 5s
-      retries: 40
-      start_period: 300s   # first start downloads the model
-    # Enable for DEVICE=cuda; leave commented on CPU-only hosts.
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
-
   ai-service:
     build:
       context: .
       dockerfile: docker/ai-service.Dockerfile
     env_file: .env
     environment:
-      WHISPER_API_URL: http://whisper-api:8000/v1
+      WHISPER_API_URL: https://23.91.224.128:40082/v1
+      WHISPER_API_KEY: 8e7975b2-4b5b-41ea-b243-d68a4f50af51
     ports:
       - "${AI_SERVICE_PORT:-8080}:8080"
     volumes:
       - ai-service-data:/data
-    depends_on:
-      whisper-api:
-        condition: service_healthy
     restart: unless-stopped
 
 volumes:
