@@ -1,64 +1,76 @@
 name: release
 
-# Cut a release from the GitHub UI: Releases -> Draft a new release ->
-# tag "vX.Y.Z", target = main, Publish. Publishing fires this workflow.
-# Guards below require the tag to sit on main and match pyproject version.
+# Automated, per-service releases via release-please.
+#
+# On every push to main, release-please reads conventional commits and maintains
+# a Release PR PER SERVICE (see release-please-config.json). Merging a service's
+# Release PR bumps its version + CHANGELOG and creates the tag:
+#   ai-service-vX.Y.Z   /   whisper-api-vX.Y.Z
+# The build-push job below then builds ONLY the just-released service's image and
+# pushes it to GHCR. Nothing to bump by hand — land good commits and merge the PR.
+#
+# Conventional commits drive the bump: `fix:` -> patch, `feat:` -> minor,
+# `feat!:` / `BREAKING CHANGE:` -> major. A commit is attributed to a service by
+# the package dir it touches (ai_service/ or whisper_api/); to force a release use
+# a `Release-As: X.Y.Z` footer.
 
 on:
-  release:
-    types: [published]
-
-permissions:
-  contents: read    # checkout only; the release already exists
-  packages: write   # push images to GHCR
+  push:
+    branches: [main]
 
 env:
   REGISTRY: ghcr.io
 
 jobs:
-  # Guards: release only from a tag that (a) sits on the main branch — i.e. the
-  # code was merged via PR — and (b) matches the pyproject version.
-  verify-release:
+  release-please:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    outputs:
+      releases_created:  ${{ steps.rp.outputs.releases_created }}
+      ai_released:       ${{ steps.rp.outputs['ai_service--release_created'] }}
+      ai_version:        ${{ steps.rp.outputs['ai_service--version'] }}
+      whisper_released:  ${{ steps.rp.outputs['whisper_api--release_created'] }}
+      whisper_version:   ${{ steps.rp.outputs['whisper_api--version'] }}
     steps:
-      - uses: actions/checkout@v4
+      # Manifest mode: picks up release-please-config.json + .release-please-manifest.json.
+      - uses: googleapis/release-please-action@v4
+        id: rp
         with:
-          fetch-depth: 0   # need full history to test ancestry against main
-      - name: Tag must be on the main branch (merged via PR)
-        run: |
-          git fetch --no-tags origin main
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error::tag $GITHUB_REF_NAME ($GITHUB_SHA) is not on main; release only from main after a PR merge"
-            exit 1
-          fi
-          echo "OK: $GITHUB_SHA is contained in origin/main"
-      - name: Tag must match pyproject version
-        run: |
-          tag="${GITHUB_REF_NAME#v}"
-          proj="$(grep -m1 '^version' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')"
-          echo "git tag: $tag | pyproject: $proj"
-          if [ "$tag" != "$proj" ]; then
-            echo "::error::git tag v$tag does not match pyproject version $proj"
-            exit 1
-          fi
+          token: ${{ secrets.GITHUB_TOKEN }}
 
+  # Build in this SAME run (not on `release: published`) because releases cut with
+  # the default GITHUB_TOKEN do not trigger downstream workflows.
   build-push:
-    needs: verify-release
+    needs: release-please
+    if: needs.release-please.outputs.releases_created == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
         include:
-          - service: whisper-api
-            dockerfile: docker/whisper-api.Dockerfile
           - service: ai-service
             dockerfile: docker/ai-service.Dockerfile
+            released: ${{ needs.release-please.outputs.ai_released }}
+            version: ${{ needs.release-please.outputs.ai_version }}
+          - service: whisper-api
+            dockerfile: docker/whisper-api.Dockerfile
+            released: ${{ needs.release-please.outputs.whisper_released }}
+            version: ${{ needs.release-please.outputs.whisper_version }}
     steps:
-      - uses: actions/checkout@v4
+      - if: matrix.released == 'true'
+        uses: actions/checkout@v4
 
-      - uses: docker/setup-buildx-action@v3
+      - if: matrix.released == 'true'
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
+        if: matrix.released == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -67,18 +79,22 @@ jobs:
 
       - name: Derive image tags & labels
         id: meta
+        if: matrix.released == 'true'
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service }}
+          # release-please already made the tag; feed its clean version straight in
+          # via `value=` so semver expansion still works.
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern={{version}},value=${{ matrix.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ matrix.version }}
+            type=semver,pattern={{major}},value=${{ matrix.version }}
             type=sha
-            # `latest` only on final releases, never on prereleases (v1.2.3-rc1)
-            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            # `latest` only on final releases, never on prereleases (1.2.3-rc1)
+            type=raw,value=latest,enable=${{ !contains(matrix.version, '-') }}
 
       - name: Build and push
+        if: matrix.released == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
