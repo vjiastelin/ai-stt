@@ -74,12 +74,12 @@ def create_app(cfg: ApiConfig, engine_factory: Callable | None) -> FastAPI:
         return app.state.engine
 
     @app.get(
-        "/healthz",
+        "/health",
         response_model=HealthResponse,
         responses={503: {"model": ErrorResponse, "description": "Model still loading"}},
         summary="Readiness probe (503 until the model is loaded)",
     )
-    def healthz():
+    def health():
         _require_engine()
         return {"status": "ok", "model": cfg.model}
 
