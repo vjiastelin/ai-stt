@@ -5,7 +5,7 @@ services:
       dockerfile: docker/ai-service.Dockerfile
     env_file: .env
     environment:
-      WHISPER_API_URL: https://23.91.224.128:40082/v1
+      WHISPER_API_URL: https://23.91.224.128:40185/v1
       WHISPER_API_KEY: 8e7975b2-4b5b-41ea-b243-d68a4f50af51
     ports:
       - "${AI_SERVICE_PORT:-8080}:8080"
