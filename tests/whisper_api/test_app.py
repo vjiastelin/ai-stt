@@ -44,11 +44,11 @@ def post_wav(client, **form):
 
 def test_healthz_503_while_loading():
     app = create_app(make_config(), engine_factory=None)
-    assert TestClient(app).get("/healthz").status_code == 503
+    assert TestClient(app).get("/health").status_code == 503
 
 
 def test_healthz_ok_when_loaded(client):
-    response = client.get("/healthz")
+    response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "model": "fake"}
 
