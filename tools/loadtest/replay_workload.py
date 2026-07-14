@@ -290,7 +290,8 @@ class Runner:
         return await self.wait_resolved(cid, self.loop.time() + self.args.max_wait)
 
 
-def report(runner: Runner, baseline_lat: list[float], drained: bool, window: float):
+def report(runner: Runner, baseline_lat: list[float], drained: bool, window: float,
+           peak_hour_calls: int | None = None):
     base_mean = sum(baseline_lat) / len(baseline_lat) if baseline_lat else None
     burst = {c: r for c, r in runner.jobs.items() if r["kind"] == "burst"}
     resolved = {c: r for c, r in burst.items() if r["job"] is not None}
@@ -310,7 +311,19 @@ def report(runner: Runner, baseline_lat: list[float], drained: bool, window: flo
         drain = (max(updated) - min(created)).total_seconds()
         lats = [server_latency(r["job"]) for r in resolved.values()]
         print(f"\ndrain time (first enqueue -> last resolved): {drain:.0f}s ({drain / 60:.1f} min)")
-        print(f"throughput: {len(resolved) / drain * 60:.1f} jobs/min" if drain else "")
+        if drain:
+            svc = drain / len(resolved)
+            print(f"throughput: {len(resolved) / drain * 60:.1f} jobs/min (avg service time {svc:.0f}s/job)")
+            if peak_hour_calls:
+                capacity = 3600 / svc
+                util = 100 * peak_hour_calls / capacity
+                print(
+                    f"capacity vs real peak: ~{capacity:.0f} jobs/hour possible,"
+                    f" real peak hour brings {peak_hour_calls} calls/hour"
+                    f" -> ~{util:.0f}% worker utilization at peak"
+                )
+                if util > 80:
+                    print("  ! <20% headroom at peak — consider verifying with the full peak hour (no --limit)")
         print(f"per-job end-to-end latency: p50={percentile(lats, 50):.0f}s  p90={percentile(lats, 90):.0f}s  max={max(lats):.0f}s")
     unresolved = runner.unresolved("burst")
     if not drained or unresolved:
@@ -328,6 +341,8 @@ def report(runner: Runner, baseline_lat: list[float], drained: bool, window: flo
     max_ratio = None
     if probes:
         print("\nprobes during drain (new transcriptions arriving behind the backlog):")
+        print("  (worker is FIFO: probes queue behind the whole backlog, so their")
+        print("   latency ~= remaining drain time at send + own processing)")
         print("  sent at   queue depth   latency     vs baseline")
         for cid in sorted(probes, key=lambda c: runner.probe_meta[c]["offset"]):
             meta, rec = runner.probe_meta[cid], probes[cid]
@@ -360,7 +375,7 @@ def report(runner: Runner, baseline_lat: list[float], drained: bool, window: flo
         print(f"  service recovered to normal latency after drain: {ok} ({rec_ratio:.1f}x)")
 
 
-async def run(args, schedule, probe_url, window):
+async def run(args, schedule, probe_url, window, peak_hour_calls):
     async with httpx.AsyncClient(
         timeout=args.timeout, limits=httpx.Limits(max_connections=args.concurrency), verify=False
     ) as client:
@@ -380,7 +395,7 @@ async def run(args, schedule, probe_url, window):
         if drained:
             await runner.recovery_probe(probe_url)
 
-        report(runner, baseline_lat, drained, window)
+        report(runner, baseline_lat, drained, window, peak_hour_calls)
 
 
 def main():
@@ -414,6 +429,7 @@ def main():
     if not calls:
         print("no .mp3 objects found for the requested hour/prefix", file=sys.stderr)
         sys.exit(1)
+    peak_hour_calls = len(calls)  # real arrivals/hour, before --limit
     if args.limit:
         calls = calls[: args.limit]
     schedule = build_schedule(calls, hour_start, args.window, args.bucket)
@@ -430,7 +446,7 @@ def main():
     if args.run_id is None:
         args.run_id = "peak-" + re.sub(r"\W+", "", args.prefix)[-12:]
     print(f"target={args.target}  run_id={args.run_id}")
-    asyncio.run(run(args, schedule, probe_url, args.window))
+    asyncio.run(run(args, schedule, probe_url, args.window, peak_hour_calls))
 
 
 if __name__ == "__main__":
