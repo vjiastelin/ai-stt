@@ -104,3 +104,13 @@ dev deps on with `uv run` (needs network to fetch pytest/jiwer):
 To run locally instead (CPU `large-v3`, much slower), install faster-whisper
 into the venv (`.venv/bin/pip install faster-whisper`) and edit the `DEVICE` /
 `COMPUTE_TYPE` constants at the top of the test if needed.
+
+To test an **external** whisper-api reached over its URL instead (e.g. a GPU
+host), set `WHISPER_API_URL` (base URL including `/v1`) and run the remote
+variant — no local model is loaded:
+
+    WHISPER_API_URL=https://gpu-host/v1 WHISPER_API_KEY=... \
+      .venv/bin/pytest tests/whisper_api/test_wer.py -k remote -m slow -s
+
+Optional overrides: `WHISPER_MODEL` (default `large-v3`), `LANGUAGE` (default
+`ru`), `WHISPER_TIMEOUT_SECONDS` (default `600`).
