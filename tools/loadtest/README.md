@@ -28,8 +28,10 @@ returns to baseline once drained.
 .venv/bin/python tools/loadtest/bpm_mock.py --port 9099
 
 # 2) ai_service — point it at the external whisper and the mock.
-#    In docker-compose.yml WHISPER_API_URL/WHISPER_API_KEY already target the external box.
-BPM_CALLBACK_URL=http://<host>:9099/callback \
+#    In docker-compose.yml WHISPER_API_URL/WHISPER_API_KEY already target the external box,
+#    and extra_hosts maps host.docker.internal -> the docker host, so the container
+#    can reach the mock running on the host:
+BPM_CALLBACK_URL=http://host.docker.internal:9099/callback \
 SUMMARY_ENABLED=false \
 docker compose up --build
 #    (S3_ENDPOINT_URL=https://s3.yandexcloud.net + S3 keys for bucket 3cx-recordings

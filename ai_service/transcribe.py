@@ -24,14 +24,15 @@ def transcribe_file(cfg: ServiceConfig, audio_path: Path) -> Transcription:
     if cfg.whisper_api_key:
         headers["Authorization"] = f"Bearer {cfg.whisper_api_key}"
     try:
-        with httpx.Client(verify=False) as client:
-            response = client.post(
-                f"{cfg.whisper_api_url}/audio/translations",
-                files={"file": (audio_path.name, fh, "audio/mpeg")},
-                data=data,
-                headers=headers,
-                timeout=cfg.whisper_timeout_seconds,
-        )
+        with audio_path.open("rb") as fh:
+            with httpx.Client(verify=False) as client:
+                response = client.post(
+                    f"{cfg.whisper_api_url}/audio/translations",
+                    files={"file": (audio_path.name, fh, "audio/mpeg")},
+                    data=data,
+                    headers=headers,
+                    timeout=cfg.whisper_timeout_seconds,
+            )
     except httpx.HTTPError as exc:
         raise InfrastructureError(f"whisper-api request failed: {exc}") from exc
 
