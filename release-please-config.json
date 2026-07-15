@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "separate-pull-requests": true,
+  "packages": {
+    "ai_service": {
+      "release-type": "simple",
+      "component": "ai-service",
+      "package-name": "ai-service"
+    },
+    "whisper_api": {
+      "release-type": "simple",
+      "component": "whisper-api",
+      "package-name": "whisper-api"
+    }
+  }
+}

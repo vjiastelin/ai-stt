@@ -5,10 +5,8 @@ services:
       dockerfile: docker/ai-service.Dockerfile
     env_file: .env
     environment:
-      WHISPER_API_URL: https://23.91.224.128:40185/v1
-      WHISPER_API_KEY: 8e7975b2-4b5b-41ea-b243-d68a4f50af51
-    extra_hosts:
-      - "host.docker.internal:host-gateway"  # lets the container reach the BPM mock on the host
+      WHISPER_API_URL: ${WHISPER_API_URL:-http://whisper-api:8000/v1}
+      WHISPER_API_KEY: ${WHISPER_API_KEY:-}
     ports:
       - "${AI_SERVICE_PORT:-8080}:8080"
     volumes:

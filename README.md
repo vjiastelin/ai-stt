@@ -45,6 +45,28 @@ is at-least-once, so the same `{CallRecordId, Summary, FullText}` payload
 may be posted more than once (e.g. after a retry that BPM actually received
 but did not acknowledge with `200`).
 
+## Releases
+
+The two services version and release **independently** and automatically, driven by
+[release-please](https://github.com/googleapis/release-please) from Conventional
+Commits — there is no version to bump by hand.
+
+- Land commits on `main` with conventional prefixes: `fix:` → patch, `feat:` → minor,
+  `feat!:` (or a `BREAKING CHANGE:` footer) → major.
+- A commit is attributed to a service by the package dir it touches — `ai_service/`
+  or `whisper_api/`. Changes to shared paths (`docker/`, `pyproject.toml`, `tests/`)
+  don't bump a service on their own; force one with a `Release-As: X.Y.Z` commit footer.
+- release-please keeps a **Release PR per service** open on `main`. Merge a service's
+  PR to cut it: that updates `<service>/version.txt` + `<service>/CHANGELOG.md` and
+  creates the tag `ai-service-vX.Y.Z` / `whisper-api-vX.Y.Z`.
+- The `release` workflow then builds **only** the just-released service and pushes it
+  to `ghcr.io/<owner>/{ai-service,whisper-api}` (tags `X.Y.Z`, `X.Y`, `X`, a commit
+  `sha`, and `latest` on non-prereleases).
+
+Per-service versions are tracked in `.release-please-manifest.json` and
+`release-please-config.json`. `[project].version` in `pyproject.toml` is only the
+Python package build version and is not part of image releases.
+
 ## Develop
 
     python3 -m venv .venv
