@@ -45,6 +45,13 @@ is at-least-once, so the same `{CallRecordId, Summary, FullText}` payload
 may be posted more than once (e.g. after a retry that BPM actually received
 but did not acknowledge with `200`).
 
+## Monitoring
+
+ai-service exposes Prometheus metrics at `GET /metrics` (port 8080): queue depth
+per state, oldest-queued age, per-stage latency histograms, transcription
+real-time factor, end-to-end delivery time, and error counters by the retry
+taxonomy. Metric reference and ready-made PromQL alert rules: [docs/metrics.md](docs/metrics.md).
+
 ## Releases
 
 The two services version and release **independently** and automatically, driven by

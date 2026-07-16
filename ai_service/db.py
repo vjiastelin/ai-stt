@@ -36,6 +36,11 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
+def parse_ts(value: str) -> datetime:
+    """Inverse of _now(): parse a stored created_at/updated_at timestamp."""
+    return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+
+
 class JobStore:
     """Thread-safe: shared by the FastAPI thread and the worker thread."""
 
@@ -119,6 +124,21 @@ class JobStore:
                 (*params, limit, offset),
             ).fetchall()
             return [self._row_to_job(row) for row in rows]
+
+    def counts_by_status(self) -> dict[str, int]:
+        """Job counts per state (for the /metrics queue gauges)."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT status, COUNT(*) AS n FROM jobs GROUP BY status"
+            ).fetchall()
+            return {row["status"]: row["n"] for row in rows}
+
+    def oldest_queued_created_at(self) -> str | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT MIN(created_at) AS ts FROM jobs WHERE status = 'queued'"
+            ).fetchone()
+            return row["ts"]
 
     def set_status(self, call_record_id: str, status: str) -> None:
         with self._lock:
