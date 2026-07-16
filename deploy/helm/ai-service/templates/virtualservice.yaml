@@ -1,0 +1,26 @@
+{{- if .Values.istio.virtualService.enabled }}
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: {{ include "ai-service.fullname" . }}
+  labels:
+    {{- include "ai-service.labels" . | nindent 4 }}
+spec:
+  hosts:
+    {{- toYaml .Values.istio.virtualService.hosts | nindent 4 }}
+  gateways:
+    {{- toYaml .Values.istio.virtualService.gateways | nindent 4 }}
+  http:
+    - match:
+        - uri:
+            prefix: {{ .Values.istio.virtualService.pathPrefix | quote }}
+      {{- if .Values.istio.virtualService.rewriteUri }}
+      rewrite:
+        uri: {{ .Values.istio.virtualService.rewriteUri | quote }}
+      {{- end }}
+      route:
+        - destination:
+            host: {{ include "ai-service.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+            port:
+              number: {{ .Values.service.port }}
+{{- end }}

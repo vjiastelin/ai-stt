@@ -5,7 +5,10 @@
     "ai_service": {
       "release-type": "simple",
       "component": "ai-service",
-      "package-name": "ai-service"
+      "package-name": "ai-service",
+      "extra-files": [
+        "deploy/helm/ai-service/Chart.yaml"
+      ]
     },
     "whisper_api": {
       "release-type": "simple",

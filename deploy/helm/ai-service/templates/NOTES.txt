@@ -1,0 +1,37 @@
+ai-service {{ .Chart.AppVersion }} deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+{{- if .Values.istio.virtualService.enabled }}
+
+Reachable through the Istio ingress gateway at:
+{{- range .Values.istio.virtualService.hosts }}
+  http://{{ . }}{{ $.Values.istio.virtualService.pathPrefix }}
+{{- end }}
+  e.g.  POST http://{{ index .Values.istio.virtualService.hosts 0 }}{{ .Values.istio.virtualService.pathPrefix }}requestTranscription
+{{- else }}
+
+No VirtualService was created (istio.virtualService.enabled=false).
+Reach the service in-cluster via ClusterIP, or port-forward for a quick check:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "ai-service.fullname" . }} 8080:{{ .Values.service.port }}
+  curl http://localhost:8080/healthz
+{{- end }}
+
+{{- if .Values.secrets.existingSecret }}
+
+Secrets: using existing Secret "{{ .Values.secrets.existingSecret }}" — it MUST provide the keys
+S3_ACCESS_KEY, S3_SECRET_KEY, and (if used) LLM_API_KEY / WHISPER_API_KEY.
+{{- else }}
+{{- if not .Values.secrets.data.S3_ACCESS_KEY }}
+
+WARNING: no S3_ACCESS_KEY / S3_SECRET_KEY set. ai-service will fail to start without valid S3
+credentials. Set secrets.data.* or point secrets.existingSecret at a pre-created Secret.
+{{- end }}
+{{- end }}
+
+Config in use:
+  WHISPER_API_URL = {{ .Values.config.WHISPER_API_URL }}
+  BPM_CALLBACK_URL = {{ .Values.config.BPM_CALLBACK_URL }}
+  SUMMARY_ENABLED  = {{ .Values.config.SUMMARY_ENABLED }}
+  DB_PATH          = {{ .Values.config.DB_PATH }} (on a {{ .Values.persistence.storageClass }} PVC, size {{ .Values.persistence.size }})
+
+Reminder: this is a SINGLETON (replicas: 1, Recreate) — the SQLite job queue must not be
+shared across pods. Do not scale up or add an HPA.

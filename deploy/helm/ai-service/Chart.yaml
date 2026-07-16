@@ -1,0 +1,12 @@
+apiVersion: v2
+name: ai-service
+description: BPM-facing transcription orchestrator (FastAPI + SQLite durable queue)
+type: application
+# Chart version — bumped by hand (not wired into release-please).
+version: 0.1.0
+# Tracks the ai-service image release; drives the default image tag.
+# Kept in lockstep with ai_service/version.txt by release-please (extra-files).
+appVersion: "0.4.0" # x-release-please-version
+home: https://github.com/vjiastelin/ai-stt
+sources:
+  - https://github.com/vjiastelin/ai-stt

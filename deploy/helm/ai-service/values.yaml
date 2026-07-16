@@ -1,0 +1,129 @@
+# Default values for the ai-service chart.
+# ai-service is a SINGLETON: one process runs the API and the background worker
+# against a single SQLite file, so it must never scale past one replica.
+# See templates/deployment.yaml (replicas is hardcoded to 1, strategy Recreate).
+
+image:
+  repository: ghcr.io/vjiastelin/ai-service
+  # Empty tag falls back to .Chart.AppVersion (see _helpers.tpl / deployment.yaml).
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Prod pulls GHCR images without a pull secret. Add one here ONLY if the
+# ai-service package is private, e.g. imagePullSecrets: [{ name: ghcr-creds }].
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# The `production` namespace has istio-injection=enabled, so the sidecar is
+# injected automatically. When deploying elsewhere, add:
+#   sidecar.istio.io/inject: "true"
+podAnnotations: {}
+
+# Runs as non-root; fsGroup lets that uid write the ReadWriteOnce volume
+# (the image itself has no dedicated USER and would otherwise run as root).
+podSecurityContext:
+  fsGroup: 1000
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 8080
+
+istio:
+  virtualService:
+    enabled: true
+    # Reference the shared cluster gateway (istio-system/services-gateway);
+    # the chart does not create its own Gateway.
+    gateways:
+      - istio-system/services-gateway
+    hosts:
+      - ai-stt.aeroclub.int
+    # Dedicated host: match everything under "/" and pass through unmodified.
+    # To route under a path prefix on a shared host, set pathPrefix to that
+    # prefix and rewriteUri to "/".
+    pathPrefix: /
+    rewriteUri: ""
+
+resources: {}
+  # limits:
+  #   cpu: 500m
+  #   memory: 512Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+persistence:
+  enabled: true
+  # Reuse a pre-created claim instead of letting the chart make one.
+  existingClaim: ""
+  # Set explicitly: the cluster has TWO default StorageClasses (local-path and
+  # nfs-client). SQLite over NFS is unsafe (file-lock issues), so pin local-path.
+  storageClass: local-path
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  mountPath: /data
+
+probes:
+  liveness:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# Non-secret environment (mirrors .env.example). Rendered into a ConfigMap.
+# Required by ai_service/config.py: S3_ENDPOINT_URL, BPM_CALLBACK_URL, and
+# (when SUMMARY_ENABLED is truthy) LLM_API_URL + LLM_MODEL.
+config:
+  S3_ENDPOINT_URL: "https://minio.example.kz"
+  # In-cluster whisper-api endpoint (whisper-api is deployed separately).
+  WHISPER_API_URL: "http://whisper-api:8000/v1"
+  WHISPER_MODEL: "large-v3"
+  WHISPER_TIMEOUT_SECONDS: "600"
+  LANGUAGE: "ru"
+  SUMMARY_ENABLED: "true"
+  LLM_API_URL: "http://vllm.example.kz:8000/v1"
+  LLM_MODEL: "qwen2.5-32b-instruct"
+  LLM_TIMEOUT_SECONDS: "120"
+  # SUMMARY_PROMPT: ""   # falls back to the Russian default in config.py
+  BPM_CALLBACK_URL: "http://bpm.example.kz/api/onTranscriptionComplete"
+  CALLBACK_TIMEOUT_SECONDS: "30"
+  MAX_RETRIES: "3"
+  RETRY_BACKOFF_CAP_SECONDS: "300"
+  DB_PATH: "/data/jobs.db"
+  LOG_LEVEL: "INFO"
+
+# Secret-worthy values. When existingSecret is set the chart renders NO Secret
+# and mounts that pre-created one instead (it must carry these same keys).
+# Empty-string entries are omitted from a chart-managed Secret.
+secrets:
+  existingSecret: ""
+  data:
+    S3_ACCESS_KEY: ""
+    S3_SECRET_KEY: ""
+    LLM_API_KEY: ""
+    WHISPER_API_KEY: ""
+
+# Extra raw env entries appended to the container (list of {name, value|valueFrom}).
+extraEnv: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

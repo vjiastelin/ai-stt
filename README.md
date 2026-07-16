@@ -67,6 +67,18 @@ Per-service versions are tracked in `.release-please-manifest.json` and
 `release-please-config.json`. `[project].version` in `pyproject.toml` is only the
 Python package build version and is not part of image releases.
 
+## Deploy to Kubernetes (Helm)
+
+A Helm chart for **ai-service** lives in [`deploy/helm/ai-service/`](deploy/helm/ai-service/)
+(it consumes the GHCR image above). It deploys ai-service as a singleton — `replicas: 1`,
+`Recreate`, one ReadWriteOnce PVC for the SQLite job queue — and exposes it through an Istio
+`VirtualService` on the shared `istio-system/services-gateway`. See the chart README for values
+and the `existingSecret` contract.
+
+    helm install ai-stt deploy/helm/ai-service -n production -f my-values.yaml
+
+`whisper-api` is not part of this chart; point `config.WHISPER_API_URL` at its in-cluster Service.
+
 ## Develop
 
     python3 -m venv .venv
