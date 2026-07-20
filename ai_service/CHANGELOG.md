@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.4.0...ai-service-v0.5.0) (2026-07-20)
+
+
+### Features
+
+* **ai-service:** add Prometheus /metrics endpoint and pipeline metrics ([#8](https://github.com/vjiastelin/ai-stt/issues/8)) ([2f6ab44](https://github.com/vjiastelin/ai-stt/commit/2f6ab4480c612d8f878194b400b33c37944111da))
+
 ## [0.4.0](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.3.2...ai-service-v0.4.0) (2026-07-14)
 
 
