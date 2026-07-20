@@ -4,9 +4,10 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
+from ai_service import metrics
 from ai_service.config import ServiceConfig
 from ai_service.db import JobStore
 from ai_service.s3io import parse_call_record_url
@@ -109,6 +110,7 @@ def create_app(cfg: ServiceConfig, store: JobStore) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
         job = store.enqueue(call_record_id, call_record_url)
+        metrics.JOBS_ENQUEUED.inc()
         logger.info("accepted %s (status=%s)", call_record_id, job.status)
         return AcceptedResponse(CallRecordId=call_record_id)
 
@@ -158,5 +160,10 @@ def create_app(cfg: ServiceConfig, store: JobStore) -> FastAPI:
     @app.get("/healthz", response_model=HealthResponse, summary="Liveness probe")
     def healthz():
         return HealthResponse()
+
+    @app.get("/metrics", summary="Prometheus metrics (text exposition format)")
+    def prometheus_metrics():
+        content, content_type = metrics.render(store)
+        return Response(content=content, media_type=content_type)
 
     return app

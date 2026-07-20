@@ -5,7 +5,7 @@ import threading
 import time
 from pathlib import Path
 
-from ai_service import callback, formats, s3io, summarize, transcribe
+from ai_service import callback, formats, metrics, s3io, summarize, transcribe
 from ai_service.config import ServiceConfig
 from ai_service.db import Job, JobStore
 from ai_service.errors import InfrastructureError, PermanentJobError
@@ -48,6 +48,7 @@ class Worker:
             try:
                 worked = self.run_once()
             except InfrastructureError as exc:
+                metrics.JOB_RETRIES.labels(kind="infrastructure").inc()
                 delay = self._backoff.next()
                 logger.warning("dependency unavailable (retry in %.0fs): %s", delay, exc)
                 self._sleep(delay)
@@ -90,26 +91,38 @@ class Worker:
             bucket, key = s3io.parse_call_record_url(job.call_record_url)
         except ValueError as exc:  # unparseable URL slipped past API validation
             self.store.mark_failed(job.call_record_id, str(exc))
+            metrics.JOBS_RESOLVED.labels(status="failed").inc()
             logger.error("job %s has invalid URL: %s", job.call_record_id, exc)
             return
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 audio_path = Path(tmp) / "audio.mp3"
-                s3io.download(self.s3, bucket, key, audio_path)
-                result = transcribe.transcribe_file(self.cfg, audio_path)
+                with metrics.observe_stage("download"):
+                    s3io.download(self.s3, bucket, key, audio_path)
+                transcribe_started = time.monotonic()
+                with metrics.observe_stage("transcribe"):
+                    result = transcribe.transcribe_file(self.cfg, audio_path)
+                metrics.AUDIO_SECONDS.inc(result.duration)
+                if result.duration > 0:
+                    metrics.TRANSCRIBE_RTF.observe(
+                        (time.monotonic() - transcribe_started) / result.duration
+                    )
             full_text = formats.to_full_text(result.segments)
-            summary = summarize.summarize(self.cfg, formats.to_plain_text(result.segments))
+            with metrics.observe_stage("summarize"):
+                summary = summarize.summarize(self.cfg, formats.to_plain_text(result.segments))
         except InfrastructureError:
             raise
         except PermanentJobError as exc:
             attempts = self.store.increment_attempts(job.call_record_id, str(exc))
             if attempts >= self.cfg.max_retries:
                 self.store.mark_failed(job.call_record_id, str(exc))
+                metrics.JOBS_RESOLVED.labels(status="failed").inc()
                 logger.error(
                     "job %s failed after %d attempts: %s", job.call_record_id, attempts, exc
                 )
             else:
                 self.store.set_status(job.call_record_id, "queued")
+                metrics.JOB_RETRIES.labels(kind="permanent").inc()
                 delay = min(5.0 * (2 ** attempts), self.cfg.retry_backoff_cap_seconds)
                 logger.warning(
                     "job %s attempt %d/%d failed (%s), retry in %.0fs",
@@ -124,6 +137,8 @@ class Worker:
         )
 
     def _deliver(self, job: Job) -> None:
-        callback.deliver(self.cfg, job.call_record_id, job.summary or "", job.full_text or "")
+        with metrics.observe_stage("callback"):
+            callback.deliver(self.cfg, job.call_record_id, job.summary or "", job.full_text or "")
         self.store.set_status(job.call_record_id, "done")
+        metrics.observe_delivered(job.created_at)
         logger.info("delivered %s to BPM", job.call_record_id)
