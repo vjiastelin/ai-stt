@@ -15,7 +15,7 @@ from ai_service.app import create_app
 from ai_service.db import JobStore
 from ai_service.worker import Worker
 
-WHISPER_URL = "http://whisper-api:8000/v1/audio/translations"
+WHISPER_URL = "http://whisper-api:8000/v1/audio/transcriptions"
 LLM_URL = "http://llm:8000/v1/chat/completions"
 BPM_URL = "http://bpm/onTranscriptionComplete"
 
