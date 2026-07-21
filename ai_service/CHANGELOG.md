@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.5.0...ai-service-v0.5.1) (2026-07-21)
+
+
+### Bug Fixes
+
+* change whipser api to transcriptions openai api compatible ([#11](https://github.com/vjiastelin/ai-stt/issues/11)) ([d22aa85](https://github.com/vjiastelin/ai-stt/commit/d22aa859b71f44cb9603b6dab2d2e6b0ac4ff944))
+
 ## [0.5.0](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.4.0...ai-service-v0.5.0) (2026-07-20)
 
 
