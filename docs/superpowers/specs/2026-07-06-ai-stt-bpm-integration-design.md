@@ -76,7 +76,7 @@ Two services developed in this repo, plus one external dependency:
 ```
 
 - **`ai-service`** — FastAPI app + SQLite-backed job queue + single background worker. Owns all integration: BPM API, S3 download, Whisper call, LLM call, callback delivery. No GPU, no ML dependencies (`fastapi`, `uvicorn`, `boto3`, `httpx`).
-- **`whisper-api`** — REST service wrapping **faster-whisper**, runs on **GPU or CPU** (`DEVICE=cuda|cpu`). Exposes the transcription endpoint at `POST /v1/audio/translations` (the OpenAI `verbose_json` transcription contract, served on the chat/completions path — not the OpenAI chat schema). Unchanged role from the previous spec.
+- **`whisper-api`** — REST service wrapping **faster-whisper**, runs on **GPU or CPU** (`DEVICE=cuda|cpu`). Exposes the transcription endpoint at `POST /v1/audio/transcriptions` (the OpenAI `verbose_json` transcription contract, served on the chat/completions path — not the OpenAI chat schema). Unchanged role from the previous spec.
 - **LLM** — any OpenAI-compatible `/v1/chat/completions` endpoint (self-hosted vLLM/Ollama). Running it is **out of scope**; only its URL/model/key are configured. Not needed when summarization is disabled.
 - No auth on `/requestTranscription` and the callback — trusted internal network (v1).
 
@@ -262,7 +262,7 @@ ai-stt/
 ├── whisper_api/
 │   ├── __main__.py      # uvicorn entrypoint
 │   ├── config.py        # env parsing (incl. COMPUTE_TYPE auto-resolution)
-│   ├── app.py           # FastAPI app: /v1/audio/translations, /healthz, auth
+│   ├── app.py           # FastAPI app: /v1/audio/transcriptions, /health, auth
 │   └── engine.py        # faster-whisper wrapper: load once, serialized transcribe
 ├── tests/
 │   ├── ai_service/
