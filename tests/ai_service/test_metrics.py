@@ -17,7 +17,7 @@ from ai_service.worker import Worker
 
 WHISPER_URL = "http://whisper-api:8000/v1/audio/transcriptions"
 LLM_URL = "http://llm:8000/v1/chat/completions"
-BPM_URL = "http://bpm/onTranscriptionComplete"
+BPM_URL_REGEX = r"http://bpm/0/ServiceModel/AnGetTranscriptionResultService\.svc/transcriptions/[^/]+/result"
 
 VERBOSE_JSON = {
     "task": "transcribe",
@@ -95,7 +95,7 @@ def test_happy_path_observes_all_stages(env):
     store, worker = env
     respx.post(WHISPER_URL).mock(return_value=httpx.Response(200, json=VERBOSE_JSON))
     respx.post(LLM_URL).mock(return_value=httpx.Response(200, json=CHAT_RESPONSE))
-    respx.post(BPM_URL).mock(return_value=httpx.Response(200))
+    respx.post(url__regex=BPM_URL_REGEX).mock(return_value=httpx.Response(200))
 
     before_done = sample("ai_service_jobs_resolved_total", {"status": "done"})
     before_stage = {
@@ -123,6 +123,7 @@ def test_happy_path_observes_all_stages(env):
 def test_permanent_failure_counts_retries_and_failed(env):
     store, worker = env
     respx.post(WHISPER_URL).mock(return_value=httpx.Response(400, json={"detail": "corrupt"}))
+    respx.post(url__regex=BPM_URL_REGEX).mock(return_value=httpx.Response(200))
 
     before_failed = sample("ai_service_jobs_resolved_total", {"status": "failed"})
     before_retries = sample("ai_service_job_retries_total", {"kind": "permanent"})
@@ -131,8 +132,9 @@ def test_permanent_failure_counts_retries_and_failed(env):
     )
 
     store.enqueue("m-bad", "s3://call-records/rec.mp3")
-    for _ in range(3):  # MAX_RETRIES=3 → two retries, then failed
+    for _ in range(3):  # MAX_RETRIES=3 → two retries, then route to delivering
         worker.run_once()
+    worker.run_once()  # deliver the failure to BPM → failed
     assert store.get("m-bad").status == "failed"
 
     assert sample("ai_service_jobs_resolved_total", {"status": "failed"}) == before_failed + 1

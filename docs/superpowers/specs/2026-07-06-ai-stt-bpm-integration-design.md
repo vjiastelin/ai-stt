@@ -40,18 +40,20 @@ sequenceDiagram
     S3-->>AI: аудиофайл
     Note over AI: Обработка: Whisper → FullText,<br/>LLM → Summary (если включено)
 
-    AI->>BPM: POST /onTranscriptionComplete (CallRecordId, Summary, FullText)
+    AI->>BPM: POST …/transcriptions/{CallRecordId}/result<br/>(Summary, FullText, Error=false)
     alt Успешный приём
         BPM-->>AI: 200 OK
     else Ошибка / timeout
         BPM-->>AI: 4xx Ошибка
         loop Повтор до успешного ответа (на стороне AI)
-            AI->>BPM: POST /onTranscriptionComplete
+            AI->>BPM: POST …/transcriptions/{CallRecordId}/result
             break Успешный ответ
                 BPM-->>AI: 200 OK
             end
         end
     end
+
+    Note over AI: При неустранимой ошибке — тот же callback<br/>с Error=true и ErrorDescription
 
     Note over BPM: Результат: заполнены поля «Краткое содержание» и «Текст разговора»
 ```
@@ -65,8 +67,9 @@ Two services developed in this repo, plus one external dependency:
   BPMSoft ────────────────────────────────────┐
      ▲                                        ▼
      │ POST {BPM_CALLBACK_URL}   ┌─── Docker: ai-service (CPU) ───┐
-     │ /onTranscriptionComplete  │ FastAPI + SQLite job queue     │
-     └───────────────────────────│ + background worker            │
+     │ /…/transcriptions/{id}/   │ FastAPI + SQLite job queue     │
+     │ result                    │ + background worker            │
+     └───────────────────────────│                                │
                                  └───┬──────────┬──────────┬─────┘
                        boto3 GET ────┘   HTTP   │          │ HTTP (optional)
                                  ▼              ▼          ▼
@@ -78,7 +81,7 @@ Two services developed in this repo, plus one external dependency:
 - **`ai-service`** — FastAPI app + SQLite-backed job queue + single background worker. Owns all integration: BPM API, S3 download, Whisper call, LLM call, callback delivery. No GPU, no ML dependencies (`fastapi`, `uvicorn`, `boto3`, `httpx`).
 - **`whisper-api`** — REST service wrapping **faster-whisper**, runs on **GPU or CPU** (`DEVICE=cuda|cpu`). Exposes the transcription endpoint at `POST /v1/audio/transcriptions` (the OpenAI `verbose_json` transcription contract, served on the chat/completions path — not the OpenAI chat schema). Unchanged role from the previous spec.
 - **LLM** — any OpenAI-compatible `/v1/chat/completions` endpoint (self-hosted vLLM/Ollama). Running it is **out of scope**; only its URL/model/key are configured. Not needed when summarization is disabled.
-- No auth on `/requestTranscription` and the callback — trusted internal network (v1).
+- No auth on `/requestTranscription` — trusted internal network (v1). The callback optionally sends a `BPMCSRF` header (`BPM_CSRF_TOKEN`) when BPM requires one.
 
 ## 3. Component: `ai-service`
 
@@ -102,7 +105,7 @@ Request body (JSON):
 
 #### `GET /jobs/{CallRecordId}`
 
-Diagnostics (the flow has no failure callback, so this is the visibility mechanism):
+Diagnostics / visibility mechanism:
 `200 {"CallRecordId": "...", "status": "queued|processing|delivering|done|failed", "attempts": 1, "error": null, "created_at": "...", "updated_at": "..."}` or `404`.
 
 #### `GET /jobs/{CallRecordId}/result`
@@ -151,11 +154,11 @@ DB file lives on a volume (`DB_PATH`). On startup, jobs stuck in `processing`/`d
    - If `SUMMARY_ENABLED=false` → `""` (LLM is not called, LLM config not required).
    - Else `POST {LLM_API_URL}/chat/completions` with `model=LLM_MODEL`, `temperature=0.2`, messages: system = `SUMMARY_PROMPT` (default: «Составь краткое содержание телефонного разговора на русском языке: основная тема, договорённости, следующие шаги. Отвечай только текстом краткого содержания.»), user = plain transcript text (without timecodes). Response `choices[0].message.content` → Summary.
 6. Store `full_text` + `summary` on the job → status `delivering`.
-7. `POST {BPM_CALLBACK_URL}` body:
+7. `POST {BPM_CALLBACK_URL}/0/ServiceModel/AnGetTranscriptionResultService.svc/transcriptions/{CallRecordId}/result` — `CallRecordId` is a path variable, the rest of the path is fixed. Body:
    ```json
-   {"CallRecordId": "...", "Summary": "...", "FullText": "[00:00:00] ..."}
+   {"Summary": "...", "FullText": "[00:00:00] ...", "Error": false, "ErrorDescription": ""}
    ```
-   On `200` → status `done`. Otherwise retry (see §3.5).
+   When `BPM_CSRF_TOKEN` is set it is sent as the `BPMCSRF` header. On `200` → status `done`. Otherwise retry (see §3.5).
 
 ### 3.4 Configuration (environment variables)
 
@@ -174,7 +177,8 @@ DB file lives on a volume (`DB_PATH`). On startup, jobs stuck in `processing`/`d
 | `LLM_MODEL` | — (required if summarization on) | Chat model name |
 | `LLM_TIMEOUT_SECONDS` | `120` | Per-request timeout |
 | `SUMMARY_PROMPT` | (Russian default, §3.3) | System prompt for summarization |
-| `BPM_CALLBACK_URL` | — (required) | Full URL of BPM's `/onTranscriptionComplete` endpoint |
+| `BPM_CALLBACK_URL` | — (required) | Base URL of the BPM host; the result path (`/0/ServiceModel/AnGetTranscriptionResultService.svc/transcriptions/{CallRecordId}/result`) is fixed in code |
+| `BPM_CSRF_TOKEN` | `""` | When set, sent to BPM as the `BPMCSRF` request header; empty = header omitted |
 | `CALLBACK_TIMEOUT_SECONDS` | `30` | Per-callback-request timeout |
 | `MAX_RETRIES` | `3` | Attempts for permanent job errors before status `failed` |
 | `RETRY_BACKOFF_CAP_SECONDS` | `300` | Max delay between infrastructure retries |
@@ -187,7 +191,7 @@ DB file lives on a volume (`DB_PATH`). On startup, jobs stuck in `processing`/`d
 Two error classes, matching the diagram's «повтор до успешного ответа»:
 
 - **Infrastructure errors** — S3/whisper-api/LLM/BPM unreachable, timeouts, HTTP `5xx` from any of them, non-200 from the BPM callback. Retried **indefinitely** with exponential backoff (5s, 10s, 20s, … capped at `RETRY_BACKOFF_CAP_SECONDS`). Not counted toward `attempts`. The job stays in its current status; the worker moves on to other jobs between retries of a `delivering` job, but a `processing` job blocks the (single) pipeline slot until its dependency recovers.
-- **Permanent job errors** — object not found in S3, corrupt/empty audio, whisper-api or LLM `4xx` for this input. Counted in `attempts`; after `MAX_RETRIES` the job becomes `failed` with `error` stored. `failed` jobs are visible via `GET /jobs/{id}` and can be re-queued by BPM re-POSTing `/requestTranscription`.
+- **Permanent job errors** — object not found in S3, corrupt/empty audio, whisper-api or LLM `4xx` for this input. Counted in `attempts`; after `MAX_RETRIES` the job is routed to `delivering` and the failure is reported to BPM via the same callback with `Error: true` and the reason in `ErrorDescription`, becoming terminal `failed` only once BPM answers `200` (delivery of a failure is at-least-once, just like a success). `failed` jobs are visible via `GET /jobs/{id}` and can be re-queued by BPM re-POSTing `/requestTranscription`.
 - The service never loses an accepted job: every state change is committed to SQLite before it takes effect.
 
 ## 4. Component: `whisper-api`
@@ -280,6 +284,6 @@ ai-stt/
 - **`ai_service` unit (pytest):** URL parsing (`s3://`, path-style https, bad schemes), FullText formatting (timecodes, hour rollover, empty transcript), config validation (LLM vars required only when `SUMMARY_ENABLED=true`).
 - **Job store:** enqueue/idempotency (duplicate `CallRecordId`, re-queue of `failed`), state transitions, restart resume (`processing` → reprocess, `delivering` → deliver stored result).
 - **API:** FastAPI `TestClient` — 200/400 on `/requestTranscription`, idempotent repeats, `/jobs/{id}`, `/healthz`.
-- **Pipeline:** respx-mocked Whisper/LLM/BPM + moto-mocked S3 — happy path, `SUMMARY_ENABLED=false` (no LLM call, `Summary=""`), 4xx vs 5xx/timeout classification per dependency, callback retry-until-200, `failed` after `MAX_RETRIES`.
+- **Pipeline:** respx-mocked Whisper/LLM/BPM + moto-mocked S3 — happy path, `SUMMARY_ENABLED=false` (no LLM call, `Summary=""`), 4xx vs 5xx/timeout classification per dependency, callback retry-until-200, failure delivered to BPM with `Error: true` after `MAX_RETRIES`.
 - **`whisper-api`:** carried over — `TestClient` with mocked engine (contract, auth, 400/422/503), `COMPUTE_TYPE` auto-resolution unit test, one `slow`-marked real test with `WHISPER_MODEL=tiny`, `DEVICE=cpu`.
-- **Integration:** `ai-service` end-to-end against moto S3, `whisper-api` app with fake engine over a real socket, a stub LLM server, and a stub BPM callback server — asserts BPM receives `CallRecordId`/`Summary`/`FullText` and the job ends `done`.
+- **Integration:** `ai-service` end-to-end against moto S3, `whisper-api` app with fake engine over a real socket, a stub LLM server, and a stub BPM callback server at `.../transcriptions/{CallRecordId}/result` — asserts BPM receives `Summary`/`FullText`/`Error`/`ErrorDescription` and the job ends `done`.

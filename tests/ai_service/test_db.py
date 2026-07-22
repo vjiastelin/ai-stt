@@ -50,6 +50,22 @@ def test_set_result_moves_to_delivering(store):
     assert [j.call_record_id for j in store.list_delivering()] == ["id-1"]
 
 
+def test_set_failed_result_moves_to_delivering_for_error_callback(store):
+    store.enqueue("id-1", "s3://b/1.mp3")
+    store.set_failed_result("id-1", "corrupt audio")
+    job = store.get("id-1")
+    assert (job.status, job.error, job.full_text) == ("delivering", "corrupt audio", None)
+    assert store.next_pending() is None  # not reprocessed
+    assert [j.call_record_id for j in store.list_delivering()] == ["id-1"]
+
+
+def test_set_result_clears_stale_error(store):
+    store.enqueue("id-1", "s3://b/1.mp3")
+    store.increment_attempts("id-1", "transient boom")
+    store.set_result("id-1", "текст", "суть")
+    assert store.get("id-1").error is None
+
+
 def test_attempts_and_failed(store):
     store.enqueue("id-1", "s3://b/1.mp3")
     assert store.increment_attempts("id-1", "err1") == 1

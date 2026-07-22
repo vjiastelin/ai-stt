@@ -12,7 +12,8 @@ from ai_service.worker import Backoff, Worker
 
 WHISPER_URL = "http://whisper-api:8000/v1/audio/transcriptions"
 LLM_URL = "http://llm:8000/v1/chat/completions"
-BPM_URL = "http://bpm/onTranscriptionComplete"
+# base "http://bpm" + fixed result path; the call_record_id is a path variable
+BPM_URL_REGEX = r"http://bpm/0/ServiceModel/AnGetTranscriptionResultService\.svc/transcriptions/[^/]+/result"
 
 VERBOSE_JSON = {
     "task": "transcribe",
@@ -49,7 +50,7 @@ def test_happy_path_process_then_deliver(env):
     store, worker = env
     respx.post(WHISPER_URL).mock(return_value=httpx.Response(200, json=VERBOSE_JSON))
     respx.post(LLM_URL).mock(return_value=httpx.Response(200, json=CHAT_RESPONSE))
-    bpm = respx.post(BPM_URL).mock(return_value=httpx.Response(200))
+    bpm = respx.post(url__regex=BPM_URL_REGEX).mock(return_value=httpx.Response(200))
     store.enqueue("id-1", "s3://call-records/rec.mp3")
 
     assert worker.run_once() is True   # process → delivering
@@ -57,11 +58,13 @@ def test_happy_path_process_then_deliver(env):
     assert worker.run_once() is True   # deliver → done
     assert store.get("id-1").status == "done"
 
+    assert bpm.calls.last.request.url.path.endswith("/transcriptions/id-1/result")
     body = json.loads(bpm.calls.last.request.content)
     assert body == {
-        "CallRecordId": "id-1",
         "Summary": "Суть звонка.",
         "FullText": "[00:00:00] привет мир",
+        "Error": False,
+        "ErrorDescription": "",
     }
     assert worker.run_once() is False  # nothing left
 
@@ -72,7 +75,7 @@ def test_summary_disabled_skips_llm(env, service_config):
     s3 = boto3.client("s3", region_name="us-east-1")  # same moto backend as the fixture
     respx.post(WHISPER_URL).mock(return_value=httpx.Response(200, json=VERBOSE_JSON))
     llm = respx.post(LLM_URL).mock(return_value=httpx.Response(200, json=CHAT_RESPONSE))
-    bpm = respx.post(BPM_URL).mock(return_value=httpx.Response(200))
+    bpm = respx.post(url__regex=BPM_URL_REGEX).mock(return_value=httpx.Response(200))
     worker = Worker(service_config(summary_enabled=False), store, s3)
     store.enqueue("id-1", "s3://call-records/rec.mp3")
 
@@ -85,20 +88,32 @@ def test_summary_disabled_skips_llm(env, service_config):
 
 
 @respx.mock
-def test_permanent_error_fails_after_max_retries(env):
+def test_permanent_error_delivers_failure_after_max_retries(env):
     store, worker = env
     respx.post(WHISPER_URL).mock(return_value=httpx.Response(400, json={"detail": "corrupt"}))
+    bpm = respx.post(url__regex=BPM_URL_REGEX).mock(return_value=httpx.Response(200))
     store.enqueue("id-1", "s3://call-records/rec.mp3")
 
     for expected_attempts in (1, 2):
         worker.run_once()
         job = store.get("id-1")
         assert (job.status, job.attempts) == ("queued", expected_attempts)
-    worker.run_once()
+
+    worker.run_once()  # third attempt exhausts retries → route to delivering
     job = store.get("id-1")
-    assert (job.status, job.attempts) == ("failed", 3)
+    assert (job.status, job.attempts) == ("delivering", 3)
+
+    assert worker.run_once() is True  # deliver the failure → failed
+    job = store.get("id-1")
+    assert job.status == "failed"
     assert "400" in job.error
-    assert worker.run_once() is False  # failed job is not picked up
+
+    body = json.loads(bpm.calls.last.request.content)
+    assert body["Error"] is True
+    assert "400" in body["ErrorDescription"]
+    assert body["FullText"] == ""
+
+    assert worker.run_once() is False  # failed job is not picked up again
 
 
 @respx.mock
@@ -130,7 +145,7 @@ def test_bpm_down_does_not_block_processing(env):
     store, worker = env
     respx.post(WHISPER_URL).mock(return_value=httpx.Response(200, json=VERBOSE_JSON))
     respx.post(LLM_URL).mock(return_value=httpx.Response(200, json=CHAT_RESPONSE))
-    respx.post(BPM_URL).mock(return_value=httpx.Response(500))
+    respx.post(url__regex=BPM_URL_REGEX).mock(return_value=httpx.Response(500))
     store.enqueue("id-1", "s3://call-records/rec.mp3")
     store.enqueue("id-2", "s3://call-records/rec.mp3")
 
@@ -148,7 +163,7 @@ def test_bpm_down_does_not_block_processing(env):
 def test_delivering_job_resumes_without_retranscribing(env):
     store, worker = env
     whisper = respx.post(WHISPER_URL).mock(return_value=httpx.Response(200, json=VERBOSE_JSON))
-    bpm = respx.post(BPM_URL).mock(return_value=httpx.Response(200))
+    bpm = respx.post(url__regex=BPM_URL_REGEX).mock(return_value=httpx.Response(200))
     store.enqueue("id-1", "s3://call-records/rec.mp3")
     store.set_result("id-1", "[00:00:00] сохранённый текст", "сохранённая суть")
 

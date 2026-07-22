@@ -4,24 +4,45 @@ import httpx
 import pytest
 import respx
 
-from ai_service.callback import deliver
+from ai_service.callback import deliver, result_url
 from ai_service.errors import InfrastructureError
 
-URL = "http://bpm/onTranscriptionComplete"
+# base "http://bpm" (conftest) + fixed path template with the call_record_id
+URL = "http://bpm/0/ServiceModel/AnGetTranscriptionResultService.svc/transcriptions/id-1/result"
 
 
 @respx.mock
-def test_deliver_posts_pascal_case_payload(service_config):
+def test_deliver_posts_result_payload(service_config):
     route = respx.post(URL).mock(return_value=httpx.Response(200))
 
     deliver(service_config(), "id-1", "суть", "[00:00:00] привет")
 
     body = json.loads(route.calls.last.request.content)
     assert body == {
-        "CallRecordId": "id-1",
         "Summary": "суть",
         "FullText": "[00:00:00] привет",
+        "Error": False,
+        "ErrorDescription": "",
     }
+
+
+@respx.mock
+def test_deliver_posts_error_payload(service_config):
+    route = respx.post(URL).mock(return_value=httpx.Response(200))
+
+    deliver(service_config(), "id-1", "", "", error=True, error_description="corrupt audio")
+
+    body = json.loads(route.calls.last.request.content)
+    assert body == {
+        "Summary": "",
+        "FullText": "",
+        "Error": True,
+        "ErrorDescription": "corrupt audio",
+    }
+
+
+def test_result_url_builds_path_from_base(service_config):
+    assert result_url(service_config(), "id-1") == URL
 
 
 @respx.mock
