@@ -22,6 +22,7 @@ def service_config(tmp_path):
             llm_timeout_seconds=5,
             summary_prompt="Составь краткое содержание.",
             bpm_callback_url="http://bpm/onTranscriptionComplete",
+            bpm_csrf_token="",
             callback_timeout_seconds=5,
             max_retries=3,
             retry_backoff_cap_seconds=300,

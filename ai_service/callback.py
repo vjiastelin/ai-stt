@@ -7,9 +7,13 @@ from ai_service.errors import InfrastructureError
 
 def deliver(cfg: ServiceConfig, call_record_id: str, summary: str, full_text: str) -> None:
     payload = {"CallRecordId": call_record_id, "Summary": summary, "FullText": full_text}
+    headers = {"BPMCSRF": cfg.bpm_csrf_token} if cfg.bpm_csrf_token else None
     try:
         response = httpx.post(
-            cfg.bpm_callback_url, json=payload, timeout=cfg.callback_timeout_seconds
+            cfg.bpm_callback_url,
+            json=payload,
+            headers=headers,
+            timeout=cfg.callback_timeout_seconds,
         )
     except httpx.HTTPError as exc:
         raise InfrastructureError(f"BPM callback failed: {exc}") from exc

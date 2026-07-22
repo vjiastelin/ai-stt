@@ -25,6 +25,24 @@ def test_deliver_posts_pascal_case_payload(service_config):
 
 
 @respx.mock
+def test_deliver_sends_bpmcsrf_header_when_token_set(service_config):
+    route = respx.post(URL).mock(return_value=httpx.Response(200))
+
+    deliver(service_config(bpm_csrf_token="secret-token"), "id-1", "s", "t")
+
+    assert route.calls.last.request.headers["BPMCSRF"] == "secret-token"
+
+
+@respx.mock
+def test_deliver_omits_bpmcsrf_header_when_token_empty(service_config):
+    route = respx.post(URL).mock(return_value=httpx.Response(200))
+
+    deliver(service_config(), "id-1", "s", "t")
+
+    assert "BPMCSRF" not in route.calls.last.request.headers
+
+
+@respx.mock
 @pytest.mark.parametrize("status", [400, 404, 500, 503])
 def test_non_200_raises_infrastructure_error(service_config, status):
     respx.post(URL).mock(return_value=httpx.Response(status))
