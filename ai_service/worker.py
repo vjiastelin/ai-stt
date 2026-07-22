@@ -90,8 +90,7 @@ class Worker:
         try:
             bucket, key = s3io.parse_call_record_url(job.call_record_url)
         except ValueError as exc:  # unparseable URL slipped past API validation
-            self.store.mark_failed(job.call_record_id, str(exc))
-            metrics.JOBS_RESOLVED.labels(status="failed").inc()
+            self.store.set_failed_result(job.call_record_id, str(exc))
             logger.error("job %s has invalid URL: %s", job.call_record_id, exc)
             return
         try:
@@ -115,8 +114,7 @@ class Worker:
         except PermanentJobError as exc:
             attempts = self.store.increment_attempts(job.call_record_id, str(exc))
             if attempts >= self.cfg.max_retries:
-                self.store.mark_failed(job.call_record_id, str(exc))
-                metrics.JOBS_RESOLVED.labels(status="failed").inc()
+                self.store.set_failed_result(job.call_record_id, str(exc))
                 logger.error(
                     "job %s failed after %d attempts: %s", job.call_record_id, attempts, exc
                 )
@@ -137,8 +135,22 @@ class Worker:
         )
 
     def _deliver(self, job: Job) -> None:
+        # a delivering job with no transcript is a failure routed here to notify BPM
+        is_error = job.full_text is None
         with metrics.observe_stage("callback"):
-            callback.deliver(self.cfg, job.call_record_id, job.summary or "", job.full_text or "")
-        self.store.set_status(job.call_record_id, "done")
-        metrics.observe_delivered(job.created_at)
-        logger.info("delivered %s to BPM", job.call_record_id)
+            callback.deliver(
+                self.cfg,
+                job.call_record_id,
+                job.summary or "",
+                job.full_text or "",
+                error=is_error,
+                error_description=job.error or "" if is_error else "",
+            )
+        if is_error:
+            self.store.set_status(job.call_record_id, "failed")
+            metrics.JOBS_RESOLVED.labels(status="failed").inc()
+            logger.info("delivered failure of %s to BPM", job.call_record_id)
+        else:
+            self.store.set_status(job.call_record_id, "done")
+            metrics.observe_delivered(job.created_at)
+            logger.info("delivered %s to BPM", job.call_record_id)

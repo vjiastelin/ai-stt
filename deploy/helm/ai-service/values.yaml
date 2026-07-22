@@ -103,7 +103,8 @@ config:
   LLM_MODEL: "qwen2.5-32b-instruct"
   LLM_TIMEOUT_SECONDS: "120"
   # SUMMARY_PROMPT: ""   # falls back to the Russian default in config.py
-  BPM_CALLBACK_URL: "http://bpm.example.kz/api/onTranscriptionComplete"
+  # base URL of the BPM host; the result path (…/transcriptions/{id}/result) is fixed in code
+  BPM_CALLBACK_URL: "http://mow2crm6:5000"
   CALLBACK_TIMEOUT_SECONDS: "30"
   MAX_RETRIES: "3"
   RETRY_BACKOFF_CAP_SECONDS: "300"
@@ -120,6 +121,8 @@ secrets:
     S3_SECRET_KEY: ""
     LLM_API_KEY: ""
     WHISPER_API_KEY: ""
+    # optional CSRF token sent to BPM as the BPMCSRF header; omitted when empty
+    BPM_CSRF_TOKEN: ""
 
 # Extra raw env entries appended to the container (list of {name, value|valueFrom}).
 extraEnv: []

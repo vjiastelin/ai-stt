@@ -6,7 +6,7 @@ REQUIRED = {
     "S3_ENDPOINT_URL": "http://minio:9000",
     "S3_ACCESS_KEY": "ak",
     "S3_SECRET_KEY": "sk",
-    "BPM_CALLBACK_URL": "http://bpm/onTranscriptionComplete",
+    "BPM_CALLBACK_URL": "http://mow2crm6:5000",
     "LLM_API_URL": "http://vllm:8000/v1",
     "LLM_MODEL": "qwen2.5",
 }
@@ -23,11 +23,17 @@ def test_defaults_applied():
     assert cfg.llm_timeout_seconds == 120
     assert cfg.summary_prompt == DEFAULT_SUMMARY_PROMPT
     assert cfg.callback_timeout_seconds == 30
+    assert cfg.bpm_csrf_token == ""
     assert cfg.max_retries == 3
     assert cfg.retry_backoff_cap_seconds == 300
     assert cfg.db_path == "/data/jobs.db"
     assert cfg.port == 8080
     assert cfg.log_level == "INFO"
+
+
+def test_bpm_callback_url_strips_trailing_slash():
+    cfg = load_config({**REQUIRED, "BPM_CALLBACK_URL": "http://mow2crm6:5000/"})
+    assert cfg.bpm_callback_url == "http://mow2crm6:5000"
 
 
 def test_missing_required_var_raises():
