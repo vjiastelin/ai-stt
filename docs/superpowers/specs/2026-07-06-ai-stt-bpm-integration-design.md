@@ -81,7 +81,7 @@ Two services developed in this repo, plus one external dependency:
 - **`ai-service`** — FastAPI app + SQLite-backed job queue + single background worker. Owns all integration: BPM API, S3 download, Whisper call, LLM call, callback delivery. No GPU, no ML dependencies (`fastapi`, `uvicorn`, `boto3`, `httpx`).
 - **`whisper-api`** — REST service wrapping **faster-whisper**, runs on **GPU or CPU** (`DEVICE=cuda|cpu`). Exposes the transcription endpoint at `POST /v1/audio/transcriptions` (the OpenAI `verbose_json` transcription contract, served on the chat/completions path — not the OpenAI chat schema). Unchanged role from the previous spec.
 - **LLM** — any OpenAI-compatible `/v1/chat/completions` endpoint (self-hosted vLLM/Ollama). Running it is **out of scope**; only its URL/model/key are configured. Not needed when summarization is disabled.
-- No auth on `/requestTranscription` — trusted internal network (v1). The callback optionally sends a `BPMCSRF` header (`BPM_CSRF_TOKEN`) when BPM requires one.
+- No auth on `/requestTranscription` — trusted internal network (v1). The callback optionally sends an `x-api-key` header (`BPM_CSRF_TOKEN`) when BPM requires one.
 
 ## 3. Component: `ai-service`
 
@@ -158,7 +158,7 @@ DB file lives on a volume (`DB_PATH`). On startup, jobs stuck in `processing`/`d
    ```json
    {"Summary": "...", "FullText": "[00:00:00] ...", "Error": false, "ErrorDescription": ""}
    ```
-   When `BPM_CSRF_TOKEN` is set it is sent as the `BPMCSRF` header. On `200` → status `done`. Otherwise retry (see §3.5).
+   When `BPM_CSRF_TOKEN` is set it is sent as the `x-api-key` header. On `200` → status `done`. Otherwise retry (see §3.5).
 
 ### 3.4 Configuration (environment variables)
 
@@ -178,7 +178,7 @@ DB file lives on a volume (`DB_PATH`). On startup, jobs stuck in `processing`/`d
 | `LLM_TIMEOUT_SECONDS` | `120` | Per-request timeout |
 | `SUMMARY_PROMPT` | (Russian default, §3.3) | System prompt for summarization |
 | `BPM_CALLBACK_URL` | — (required) | Base URL of the BPM host; the result path (`/0/ServiceModel/AnGetTranscriptionResultService.svc/transcriptions/{CallRecordId}/result`) is fixed in code |
-| `BPM_CSRF_TOKEN` | `""` | When set, sent to BPM as the `BPMCSRF` request header; empty = header omitted |
+| `BPM_CSRF_TOKEN` | `""` | When set, sent to BPM as the `x-api-key` request header; empty = header omitted |
 | `CALLBACK_TIMEOUT_SECONDS` | `30` | Per-callback-request timeout |
 | `MAX_RETRIES` | `3` | Attempts for permanent job errors before status `failed` |
 | `RETRY_BACKOFF_CAP_SECONDS` | `300` | Max delay between infrastructure retries |

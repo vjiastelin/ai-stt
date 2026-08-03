@@ -30,7 +30,7 @@ def deliver(
         "Error": error,
         "ErrorDescription": error_description,
     }
-    headers = {"BPMCSRF": cfg.bpm_csrf_token} if cfg.bpm_csrf_token else None
+    headers = {"x-api-key": cfg.bpm_csrf_token} if cfg.bpm_csrf_token else None
     try:
         response = httpx.post(
             result_url(cfg, call_record_id),

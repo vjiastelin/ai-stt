@@ -15,7 +15,7 @@ Two services:
   as `{Summary, FullText, Error, ErrorDescription}` (retried until BPM answers
   200). A permanently-failed job is reported the same way with `Error: true`
   and the reason in `ErrorDescription`. When `BPM_CSRF_TOKEN` is set it is sent
-  as the `BPMCSRF` request header.
+  as the `x-api-key` request header.
   Inspection endpoints: `GET /jobs` (list, newest first, `?status=` filter +
   `limit`/`offset`), `GET /jobs/{CallRecordId}` (status), and
   `GET /jobs/{CallRecordId}/result` (the `Summary` and `FullText`).

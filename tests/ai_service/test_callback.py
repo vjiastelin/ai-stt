@@ -51,7 +51,7 @@ def test_deliver_sends_bpmcsrf_header_when_token_set(service_config):
 
     deliver(service_config(bpm_csrf_token="secret-token"), "id-1", "s", "t")
 
-    assert route.calls.last.request.headers["BPMCSRF"] == "secret-token"
+    assert route.calls.last.request.headers["x-api-key"] == "secret-token"
 
 
 @respx.mock
@@ -60,7 +60,7 @@ def test_deliver_omits_bpmcsrf_header_when_token_empty(service_config):
 
     deliver(service_config(), "id-1", "s", "t")
 
-    assert "BPMCSRF" not in route.calls.last.request.headers
+    assert "x-api-key" not in route.calls.last.request.headers
 
 
 @respx.mock
