@@ -83,8 +83,8 @@ Python package build version and is not part of image releases.
 A Helm chart for **ai-service** lives in [`deploy/helm/ai-service/`](deploy/helm/ai-service/)
 (it consumes the GHCR image above). It deploys ai-service as a singleton — `replicas: 1`,
 `Recreate`, one ReadWriteOnce PVC for the SQLite job queue — and exposes it through an Istio
-`VirtualService` on the shared `istio-system/services-gateway`. See the chart README for values
-and the `existingSecret` contract.
+`VirtualService` on the shared `istio-system/services-gateway` at a namespace-bound host
+`ai-stt.<namespace>.aeroclub.int`. See the chart README for values and the `existingSecret` contract.
 
     helm install ai-stt deploy/helm/ai-service -n production -f my-values.yaml
 

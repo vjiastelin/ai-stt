@@ -36,9 +36,21 @@ automatically. In a namespace without that label, add
 ## Networking (Istio)
 
 The chart creates a `VirtualService` (`networking.istio.io/v1`) bound to the shared cluster gateway
-`istio-system/services-gateway`. By default it exposes host `ai-stt.aeroclub.int` under path `/`.
-No `Gateway` or `DestinationRule` is created (mTLS is the mesh default; the cluster uses no
-DestinationRules). Set `istio.virtualService.enabled=false` for a ClusterIP-only deployment.
+`istio-system/services-gateway` — the convention for plain (non-Knative) HTTP services in the
+cluster. It deliberately does **not** use the Knative gateways (`knative-ingress-gateway` /
+`knative-local-gateway` / `mesh`): those are auto-generated for Knative `ksvc` workloads, which a
+SQLite singleton must not be.
+
+The host is **namespace-bound**: when `istio.virtualService.hosts` is empty (the default) the chart
+derives `ai-stt.<release-namespace>.aeroclub.int`, so one values file yields `ai-stt.beta.aeroclub.int`
+in `beta` and `ai-stt.production.aeroclub.int` in `production`. Set `istio.virtualService.hosts`
+explicitly to override (e.g. a namespace-less vanity host `ai-stt.aeroclub.int`). Add `- mesh` to
+`istio.virtualService.gateways` only if in-cluster services need to reach ai-service by that host
+(not needed when callers are external). Routing is under path `/`.
+
+No `Gateway` or `DestinationRule` is created (mTLS is permissive; the cluster uses no
+DestinationRules). External DNS for the chosen host must point at the Istio ingress LB. Set
+`istio.virtualService.enabled=false` for a ClusterIP-only deployment.
 
 ## Secrets
 
@@ -64,7 +76,7 @@ and the Secret are checksummed into the pod template, so changing either trigger
 | `service.port` | `8080` | container listens on 8080 |
 | `istio.virtualService.enabled` | `true` | |
 | `istio.virtualService.gateways` | `[istio-system/services-gateway]` | shared gateway, referenced not created |
-| `istio.virtualService.hosts` | `[ai-stt.aeroclub.int]` | |
+| `istio.virtualService.hosts` | `[]` | empty ⇒ derived `ai-stt.<namespace>.aeroclub.int`; set to override |
 | `istio.virtualService.pathPrefix` | `/` | |
 | `istio.virtualService.rewriteUri` | `""` | set to `/` when routing under a path prefix |
 | `persistence.storageClass` | `local-path` | pinned; NFS is unsafe for SQLite |

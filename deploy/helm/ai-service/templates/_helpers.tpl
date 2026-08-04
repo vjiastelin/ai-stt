@@ -71,6 +71,19 @@ Name of the Secret to consume: the existing one if provided, else our own.
 {{- end -}}
 
 {{/*
+VirtualService hosts: explicit override if set, else a namespace-bound default
+(ai-stt.<namespace>.aeroclub.int) so beta/production get distinct hostnames from
+one values.yaml. Rendered as a YAML list.
+*/}}
+{{- define "ai-service.vsHosts" -}}
+{{- if .Values.istio.virtualService.hosts -}}
+{{- toYaml .Values.istio.virtualService.hosts -}}
+{{- else -}}
+- {{ printf "ai-stt.%s.aeroclub.int" .Release.Namespace | quote }}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Image reference (tag falls back to the chart appVersion).
 */}}
 {{- define "ai-service.image" -}}

@@ -7,7 +7,7 @@ metadata:
     {{- include "ai-service.labels" . | nindent 4 }}
 spec:
   hosts:
-    {{- toYaml .Values.istio.virtualService.hosts | nindent 4 }}
+    {{- include "ai-service.vsHosts" . | nindent 4 }}
   gateways:
     {{- toYaml .Values.istio.virtualService.gateways | nindent 4 }}
   http:
