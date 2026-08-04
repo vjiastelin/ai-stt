@@ -10,14 +10,18 @@ Two services:
 
 - **ai-service** — FastAPI + durable SQLite job queue.
   `POST /requestTranscription` (`CallRecordId`, `CallRecordUrl`) → 200 accepted;
-  result is delivered to `BPM_CALLBACK_URL` as
-  `{CallRecordId, Summary, FullText}` (retried until BPM answers 200).
+  the result is `POST`ed to
+  `{BPM_CALLBACK_URL}/0/ServiceModel/AnGetTranscriptionResultService.svc/transcriptions/{CallRecordId}/result`
+  as `{Summary, FullText, Error, ErrorDescription}` (retried until BPM answers
+  200). A permanently-failed job is reported the same way with `Error: true`
+  and the reason in `ErrorDescription`. When `BPM_CSRF_TOKEN` is set it is sent
+  as the `x-api-key` request header.
   Inspection endpoints: `GET /jobs` (list, newest first, `?status=` filter +
   `limit`/`offset`), `GET /jobs/{CallRecordId}` (status), and
   `GET /jobs/{CallRecordId}/result` (the `Summary` and `FullText`).
   `GET /healthz` liveness.
 - **whisper-api** — FastAPI + faster-whisper (GPU or CPU, `DEVICE=cuda|cpu`),
-  OpenAI-compatible transcription at `POST /v1/audio/translations` (multipart
+  OpenAI-compatible transcription at `POST /v1/audio/transcriptions` (multipart
   upload → `verbose_json` with timecoded segments). Decode options are tunable
   via `TRANSCRIBE_OPTIONS` (JSON), and it can serve HTTPS via `SSL_CERTFILE`/
   `SSL_KEYFILE` — see `.env.example`.
@@ -40,10 +44,10 @@ On CPU-only hosts, set `DEVICE=cpu` in `.env` (the default is `cuda`).
 A `failed` job (see `GET /jobs/{id}`) is retried by re-POSTing
 `/requestTranscription` with the same `CallRecordId`.
 
-BPM's callback endpoint (`BPM_CALLBACK_URL`) should be idempotent: delivery
-is at-least-once, so the same `{CallRecordId, Summary, FullText}` payload
-may be posted more than once (e.g. after a retry that BPM actually received
-but did not acknowledge with `200`).
+BPM's result endpoint should be idempotent: delivery is at-least-once, so the
+same `{Summary, FullText, Error, ErrorDescription}` payload may be posted more
+than once (e.g. after a retry that BPM actually received but did not acknowledge
+with `200`).
 
 ## Monitoring
 

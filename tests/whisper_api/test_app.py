@@ -36,7 +36,7 @@ def client():
 def post_wav(client, **form):
     data = {"model": "fake", "response_format": "verbose_json", **form}
     return client.post(
-        "/v1/audio/translations",
+        "/v1/audio/transcriptions",
         files={"file": ("a.mp3", io.BytesIO(b"RIFF-fake"), "audio/mpeg")},
         data=data,
     )
@@ -72,7 +72,7 @@ def test_transcription_503_while_loading():
 
 def test_empty_file_400(client):
     response = client.post(
-        "/v1/audio/translations",
+        "/v1/audio/transcriptions",
         files={"file": ("a.mp3", io.BytesIO(b""), "audio/mpeg")},
         data={"model": "fake", "response_format": "verbose_json"},
     )
@@ -89,7 +89,7 @@ def test_auth_enforced_when_key_set():
     client = TestClient(app)
     assert post_wav(client).status_code == 401
     ok = client.post(
-        "/v1/audio/translations",
+        "/v1/audio/transcriptions",
         files={"file": ("a.mp3", io.BytesIO(b"RIFF"), "audio/mpeg")},
         data={"model": "fake", "response_format": "verbose_json"},
         headers={"Authorization": "Bearer secret"},
@@ -121,7 +121,7 @@ def test_openapi_documents_response_schemas(client):
     spec = client.get("/openapi.json").json()
     schemas = spec["components"]["schemas"]
     assert set(schemas["SegmentModel"]["required"]) == {"id", "start", "end", "text"}
-    post = spec["paths"]["/v1/audio/translations"]["post"]
+    post = spec["paths"]["/v1/audio/transcriptions"]["post"]
     ok_schema = post["responses"]["200"]["content"]["application/json"]["schema"]
     assert ok_schema["$ref"].endswith("TranscriptionResponse")
     assert "401" in post["responses"]

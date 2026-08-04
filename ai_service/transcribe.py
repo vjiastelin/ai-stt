@@ -26,7 +26,7 @@ def transcribe_file(cfg: ServiceConfig, audio_path: Path) -> Transcription:
     try:
         with audio_path.open("rb") as fh:
             response = httpx.post(
-                f"{cfg.whisper_api_url}/audio/translations",
+                f"{cfg.whisper_api_url}/audio/transcriptions",
                 files={"file": (audio_path.name, fh, "audio/mpeg")},
                 data=data,
                 headers=headers,

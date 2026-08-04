@@ -206,7 +206,7 @@ ai-stt/
 ├── whisper_api/
 │   ├── __main__.py      # uvicorn entrypoint
 │   ├── config.py        # env parsing/validation
-│   ├── app.py           # FastAPI app: /v1/audio/translations, /healthz, auth
+│   ├── app.py           # FastAPI app: /v1/audio/transcriptions, /health, auth
 │   └── engine.py        # faster-whisper wrapper: load once, serialized transcribe
 ├── tests/
 │   ├── worker/
