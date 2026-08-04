@@ -95,7 +95,7 @@ config:
   S3_ENDPOINT_URL: "https://s3.yandexcloud.net"
   # External whisper-api host (authenticated with WHISPER_API_KEY in the Secret).
   # For an in-cluster deployment instead, use "http://whisper-api:8000/v1".
-  WHISPER_API_URL: "https://96.20.36.104:40073/v1"
+  WHISPER_API_URL: "http://llm-proxy.aeroclub.int/v1/audio/transcriptions"
   WHISPER_MODEL: "large-v3"
   WHISPER_TIMEOUT_SECONDS: "600"
   LANGUAGE: "ru"
