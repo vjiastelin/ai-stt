@@ -31,6 +31,7 @@ class ServiceConfig:
     llm_timeout_seconds: int
     summary_prompt: str
     bpm_callback_url: str
+    bpm_csrf_token: str
     callback_timeout_seconds: int
     max_retries: int
     retry_backoff_cap_seconds: int
@@ -69,7 +70,8 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         llm_model=llm_model,
         llm_timeout_seconds=int(env.get("LLM_TIMEOUT_SECONDS", "120")),
         summary_prompt=env.get("SUMMARY_PROMPT", DEFAULT_SUMMARY_PROMPT),
-        bpm_callback_url=_require(env, "BPM_CALLBACK_URL"),
+        bpm_callback_url=_require(env, "BPM_CALLBACK_URL").rstrip("/"),
+        bpm_csrf_token=env.get("BPM_CSRF_TOKEN", ""),
         callback_timeout_seconds=int(env.get("CALLBACK_TIMEOUT_SECONDS", "30")),
         max_retries=int(env.get("MAX_RETRIES", "3")),
         retry_backoff_cap_seconds=int(env.get("RETRY_BACKOFF_CAP_SECONDS", "300")),

@@ -57,9 +57,12 @@ def _make_llm_stub():
 def _make_bpm_stub(received: list):
     app = FastAPI()
 
-    @app.post("/onTranscriptionComplete")
-    async def on_complete(payload: dict):
-        received.append(payload)
+    @app.post(
+        "/0/ServiceModel/AnGetTranscriptionResultService.svc"
+        "/transcriptions/{call_record_id}/result"
+    )
+    async def on_complete(call_record_id: str, payload: dict):
+        received.append({"CallRecordId": call_record_id, **payload})
         return {"ok": True}
 
     return app
@@ -87,7 +90,7 @@ def test_full_chain(tmp_path, service_config):
             cfg = service_config(
                 whisper_api_url=f"http://127.0.0.1:{whisper_port}/v1",
                 llm_api_url=f"http://127.0.0.1:{llm_port}/v1",
-                bpm_callback_url=f"http://127.0.0.1:{bpm_port}/onTranscriptionComplete",
+                bpm_callback_url=f"http://127.0.0.1:{bpm_port}",
             )
             store = JobStore(cfg.db_path)
             api = TestClient(create_service_app(cfg, store))
@@ -108,6 +111,8 @@ def test_full_chain(tmp_path, service_config):
                     "CallRecordId": "call-1",
                     "Summary": "Суть звонка.",
                     "FullText": "[00:00:00] тестовая запись",
+                    "Error": False,
+                    "ErrorDescription": "",
                 }
             ]
     finally:

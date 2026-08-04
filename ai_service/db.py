@@ -147,8 +147,22 @@ class JobStore:
     def set_result(self, call_record_id: str, full_text: str, summary: str) -> None:
         with self._lock:
             self._update(
-                call_record_id, full_text=full_text, summary=summary, status="delivering"
+                call_record_id,
+                full_text=full_text,
+                summary=summary,
+                error=None,  # clear any error left by an earlier transient retry
+                status="delivering",
             )
+
+    def set_failed_result(self, call_record_id: str, error: str) -> None:
+        """Route a permanently-failed job to delivering so BPM is notified (Error:true).
+
+        full_text stays NULL — the delivery loop uses that to tell a failure
+        callback from a success one — and the job becomes terminal `failed`
+        only once BPM has acknowledged the error.
+        """
+        with self._lock:
+            self._update(call_record_id, error=error, status="delivering")
 
     def increment_attempts(self, call_record_id: str, error: str) -> int:
         with self._lock:
