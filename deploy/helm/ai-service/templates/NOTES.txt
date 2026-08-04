@@ -2,11 +2,12 @@ ai-service {{ .Chart.AppVersion }} deployed as release "{{ .Release.Name }}" in 
 
 {{- if .Values.istio.virtualService.enabled }}
 
+{{- $vsHosts := fromYamlArray (include "ai-service.vsHosts" .) }}
 Reachable through the Istio ingress gateway at:
-{{- range .Values.istio.virtualService.hosts }}
+{{- range $vsHosts }}
   http://{{ . }}{{ $.Values.istio.virtualService.pathPrefix }}
 {{- end }}
-  e.g.  POST http://{{ index .Values.istio.virtualService.hosts 0 }}{{ .Values.istio.virtualService.pathPrefix }}requestTranscription
+  e.g.  POST http://{{ index $vsHosts 0 }}{{ .Values.istio.virtualService.pathPrefix }}requestTranscription
 {{- else }}
 
 No VirtualService was created (istio.virtualService.enabled=false).

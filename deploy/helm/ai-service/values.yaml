@@ -46,11 +46,19 @@ istio:
   virtualService:
     enabled: true
     # Reference the shared cluster gateway (istio-system/services-gateway);
-    # the chart does not create its own Gateway.
+    # the chart does not create its own Gateway. ai-service is a plain (non-Knative)
+    # Deployment, so it uses this ingress gateway like llm-proxy/aiservices — NOT the
+    # Knative gateways (those are auto-generated for ksvc workloads, which a SQLite
+    # singleton must not be). Add `- mesh` here only if in-cluster services need to
+    # reach ai-service by hostname (not required today: BPM calls in from outside).
     gateways:
       - istio-system/services-gateway
-    hosts:
-      - ai-stt.aeroclub.int
+    # Empty = namespace-bound default ai-stt.<namespace>.aeroclub.int (via the
+    # ai-service.vsHosts helper), so `beta` → ai-stt.beta.aeroclub.int and
+    # `production` → ai-stt.production.aeroclub.int from one values.yaml. Set an
+    # explicit entry to override, e.g. a prod vanity host without the namespace:
+    #   hosts: ["ai-stt.aeroclub.int"]
+    hosts: []
     # Dedicated host: match everything under "/" and pass through unmodified.
     # To route under a path prefix on a shared host, set pathPrefix to that
     # prefix and rewriteUri to "/".
