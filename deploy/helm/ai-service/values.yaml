@@ -42,6 +42,26 @@ service:
   type: ClusterIP
   port: 8080
 
+# Prometheus scraping of GET /metrics (see docs/metrics.md for the metric list).
+# Without the ServiceMonitor nothing scrapes ai-service and the Grafana dashboard
+# renders empty — the app exposes metrics regardless, they just go nowhere.
+#
+# The Grafana dashboard and its alert rules are NOT part of this chart: they are
+# Grafana-managed resources on grafana-ai.aeroclub.int, versioned in the
+# services-ai-grafana repo (the cluster convention — see docs/metrics.md).
+metrics:
+  serviceMonitor:
+    enabled: true
+    # kube-prometheus-stack's Prometheus CR selects ServiceMonitors by
+    # `matchLabels: {release: prometheus-stack}`. Wrong/missing value = the object
+    # is ignored silently. Change only if the monitoring stack is reinstalled
+    # under a different Helm release name.
+    releaseLabel: prometheus-stack
+    # The cluster's global scrapeInterval is 30s; matching it avoids gaps in the
+    # scrape-time queue gauges without adding load.
+    interval: 30s
+    scrapeTimeout: 10s
+
 istio:
   virtualService:
     enabled: true

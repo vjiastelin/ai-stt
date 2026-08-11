@@ -1,0 +1,44 @@
+{{- if .Values.metrics.serviceMonitor.enabled }}
+{{- /*
+Scrape target for kube-prometheus-stack. Three selection hops, two different label
+sets — getting either wrong fails silently (no error, just no target):
+
+  1. Prometheus -> this object, via the Prometheus CR's
+     serviceMonitorSelector (matchLabels release=prometheus-stack in this
+     cluster). Hence the `release` label below. namespaceSelector is empty
+     cluster-side, so any namespace is eligible.
+  2. this object -> the Service, via spec.selector matched against the
+     SERVICE's metadata.labels (not its spec.selector, not pod labels).
+  3. the Service -> targets: the operator scrapes the pod IPs behind the
+     Service's Endpoints, not the ClusterIP. spec.endpoints[].port is the port
+     NAME from the Service's spec.ports[].name.
+
+The generated `job` label defaults to the Service name (ai-<release>-ai-service),
+which is what the Grafana dashboard and the AiServiceDown alert key on.
+*/}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "ai-service.fullname" . }}
+  labels:
+    {{- include "ai-service.labels" . | nindent 4 }}
+    # Hop 1: the operator ignores this object without the label its
+    # serviceMonitorSelector looks for.
+    release: {{ .Values.metrics.serviceMonitor.releaseLabel }}
+spec:
+  # Hop 2: selector labels ONLY (name + instance). Deliberately not
+  # ai-service.labels — that adds helm.sh/chart and app.kubernetes.io/version,
+  # which change on every chart/appVersion bump and would break the match.
+  selector:
+    matchLabels:
+      {{- include "ai-service.selectorLabels" . | nindent 6 }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    # Hop 3: `http` is the Service's only named port (see service.yaml).
+    - port: http
+      path: /metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
+{{- end }}

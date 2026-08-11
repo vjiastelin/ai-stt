@@ -52,6 +52,39 @@ No `Gateway` or `DestinationRule` is created (mTLS is permissive; the cluster us
 DestinationRules). External DNS for the chosen host must point at the Istio ingress LB. Set
 `istio.virtualService.enabled=false` for a ClusterIP-only deployment.
 
+## Monitoring
+
+ai-service serves Prometheus metrics at `GET /metrics` on the same port as the API (8080).
+The chart creates a `ServiceMonitor` (`metrics.serviceMonitor.enabled`, default `true`) so
+kube-prometheus-stack picks the target up. Selection happens in three hops, and each one
+fails **silently** — no error, just a missing target:
+
+1. **Prometheus → ServiceMonitor.** The Prometheus CR selects ServiceMonitors by
+   `matchLabels: {release: prometheus-stack}`, so the object carries that label
+   (`metrics.serviceMonitor.releaseLabel`). Its namespace selector is empty cluster-side, so
+   any namespace works.
+2. **ServiceMonitor → Service.** `spec.selector` matches the **Service's `metadata.labels`**
+   (not its `spec.selector`, not pod labels). The chart uses only the selector labels
+   `app.kubernetes.io/name` + `app.kubernetes.io/instance` — deliberately *not* the full label
+   set, since `helm.sh/chart` and `app.kubernetes.io/version` change on every bump and would
+   break the match.
+3. **Service → targets.** The operator scrapes the **pod IPs behind the Service's Endpoints**,
+   not the ClusterIP. `endpoints[].port` is the port *name* (`http`).
+
+The resulting `job` label is the Service name (`<release>-ai-service`), which is what the
+Grafana dashboard variables and the `AiServiceDown` alert key on.
+
+The **dashboard and alert rules are not part of this chart.** They are Grafana-managed
+resources on `grafana-ai.aeroclub.int` (dashboard uid `ai-stt`, folder `AI Services`),
+versioned in the `services-ai-grafana` repo — the cluster convention for both. See
+[`docs/metrics.md`](../../../docs/metrics.md).
+
+Verify without a cluster:
+
+```bash
+helm template ai-stt deploy/helm/ai-service -n beta -s templates/servicemonitor.yaml
+```
+
 ## Secrets
 
 Two modes:
@@ -74,6 +107,9 @@ and the Secret are checksummed into the pod template, so changing either trigger
 | `image.tag` | `""` | falls back to chart `appVersion` |
 | `imagePullSecrets` | `[]` | add a `dockerconfigjson` secret only if the GHCR package is private |
 | `service.port` | `8080` | container listens on 8080 |
+| `metrics.serviceMonitor.enabled` | `true` | creates the ServiceMonitor; without it nothing scrapes `/metrics` |
+| `metrics.serviceMonitor.releaseLabel` | `prometheus-stack` | must match the Prometheus CR's `serviceMonitorSelector` |
+| `metrics.serviceMonitor.interval` | `30s` | matches the cluster's global `scrapeInterval` |
 | `istio.virtualService.enabled` | `true` | |
 | `istio.virtualService.gateways` | `[istio-system/services-gateway]` | shared gateway, referenced not created |
 | `istio.virtualService.hosts` | `[]` | empty ⇒ derived `ai-stt.<namespace>.aeroclub.int`; set to override |
