@@ -99,6 +99,15 @@ persistence:
   existingClaim: ""
   # Set explicitly: the cluster has TWO default StorageClasses (local-path and
   # nfs-client). SQLite over NFS is unsafe (file-lock issues), so pin local-path.
+  #
+  # local-path is NODE-LOCAL: the PV is a hostPath under
+  # /opt/local-path-provisioner on whichever node first ran the pod, and it is
+  # NOT enforced by the scheduler (the PV's nodeAffinity uses matchFields on
+  # metadata.name, which the volume-binding check ignores for hostPath PVs). A
+  # pod that lands on any other node gets a brand-new empty root:root 0755
+  # directory created by kubelet (type: DirectoryOrCreate) — the job queue looks
+  # wiped and startup dies with "unable to open database file".
+  # => keep nodeSelector below pinned to the node holding the PV.
   storageClass: local-path
   accessMode: ReadWriteOnce
   size: 1Gi
@@ -166,6 +175,15 @@ secrets:
 # Extra raw env entries appended to the container (list of {name, value|valueFrom}).
 extraEnv: []
 
-nodeSelector: {}
+# Pinned to the node that owns the local-path PV (see persistence.storageClass).
+# Same mechanism the other local-path workloads in this cluster use — e.g.
+# ai-portal-pg is pinned to mow2ksw20 and ai-portal to mow2ksw22.
+# When changing this, find the node the PV actually lives on:
+#   kubectl -n <ns> get pvc ai-stt-ai-service -o jsonpath='{.spec.volumeName}'
+#   kubectl get pv <volume> -o jsonpath='{.metadata.annotations.local\.path\.provisioner/selected-node}'
+# Moving the pod to a different node means starting from an EMPTY job queue;
+# copy /opt/local-path-provisioner/<pv>_<ns>_<pvc>/jobs.db across first.
+nodeSelector:
+  kubernetes.io/hostname: mow2ksw24
 tolerations: []
 affinity: {}

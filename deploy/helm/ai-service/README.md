@@ -15,6 +15,34 @@ SQLite file (`DB_PATH=/data/jobs.db`). The chart therefore deploys it as a singl
 **Do not scale up and do not add an HPA** — two pods sharing the SQLite file would double-process
 and corrupt the queue.
 
+## Storage is node-local — pin the pod
+
+The `local-path` PV is a hostPath directory (`/opt/local-path-provisioner/<pv>_<ns>_<pvc>`) on the
+single node that first ran the pod. That binding is **not enforced by the scheduler**: the PV's
+`nodeAffinity` uses `matchFields: metadata.name`, which the volume-binding check ignores for
+hostPath PVs. If the pod is rescheduled elsewhere, kubelet (`type: DirectoryOrCreate`) silently
+creates a fresh, empty, `root:root 0755` directory on the new node — so the pod either starts on an
+**empty job queue** or, because it runs as uid 1000, dies at startup with:
+
+```
+sqlite3.OperationalError: unable to open database file
+```
+
+So `nodeSelector.kubernetes.io/hostname` must name the node that holds the PV — the same mechanism
+the cluster's other local-path workloads use (`ai-portal-pg` → `mow2ksw20`, `ai-portal` →
+`mow2ksw22`). Find the node:
+
+```bash
+kubectl get pv $(kubectl -n <ns> get pvc ai-stt-ai-service -o jsonpath='{.spec.volumeName}') \
+  -o jsonpath='{.metadata.annotations.local\.path\.provisioner/selected-node}'
+```
+
+To move the service to another node, copy `jobs.db` from that directory to the new node first —
+otherwise queued jobs are left behind (`helm` will happily start with an empty DB).
+
+No `chown` initContainer is needed: the provisioner creates its directory `0777`, so the non-root
+container can write it as long as the pod is on the right node.
+
 ## Install
 
 ```bash
@@ -118,6 +146,7 @@ and the Secret are checksummed into the pod template, so changing either trigger
 | `persistence.storageClass` | `local-path` | pinned; NFS is unsafe for SQLite |
 | `persistence.size` | `1Gi` | |
 | `persistence.existingClaim` | `""` | reuse a PVC instead of creating one |
+| `nodeSelector` | `kubernetes.io/hostname: mow2ksw24` | **required with local-path** — the PV is node-local; see below |
 | `config.WHISPER_API_URL` | `http://whisper-api:8000/v1` | in-cluster whisper-api Service |
 | `config.BPM_CALLBACK_URL` | example | **must** be set to your BPM endpoint |
 | `secrets.existingSecret` | `""` | reference a pre-created Secret |

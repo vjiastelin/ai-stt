@@ -34,5 +34,16 @@ Config in use:
   SUMMARY_ENABLED  = {{ .Values.config.SUMMARY_ENABLED }}
   DB_PATH          = {{ .Values.config.DB_PATH }} (on a {{ .Values.persistence.storageClass }} PVC, size {{ .Values.persistence.size }})
 
+{{- if and .Values.persistence.enabled (not (get (.Values.nodeSelector | default dict) "kubernetes.io/hostname")) }}
+
+WARNING: persistence is on but nodeSelector."kubernetes.io/hostname" is unset. A local-path PV
+lives on one node only, and the scheduler does not keep the pod there — if it moves, kubelet
+creates an empty directory on the new node and ai-service starts with an EMPTY job queue (or
+crashes with "unable to open database file"). Pin the pod:
+  kubectl get pv $(kubectl -n {{ .Release.Namespace }} get pvc {{ .Values.persistence.existingClaim | default (include "ai-service.fullname" .) }} -o jsonpath='{.spec.volumeName}') \
+    -o jsonpath='{.metadata.annotations.local\.path\.provisioner/selected-node}'
+then set nodeSelector.kubernetes.io/hostname to that node.
+{{- end }}
+
 Reminder: this is a SINGLETON (replicas: 1, Recreate) — the SQLite job queue must not be
 shared across pods. Do not scale up or add an HPA.
