@@ -104,7 +104,10 @@ config:
   # External whisper-api host (authenticated with WHISPER_API_KEY in the Secret).
   # For an in-cluster deployment instead, use "http://whisper-api:8000/v1".
   WHISPER_API_URL: "http://llm-proxy.aeroclub.int/v1"
-  WHISPER_MODEL: "large-v3"
+  # Must match an id from GET {WHISPER_API_URL}/models — llm-proxy namespaces it
+  # as "whisper/large-v3" and answers 403 permission_error for a bare "large-v3".
+  # Use plain "large-v3" only when talking to our own whisper-api directly.
+  WHISPER_MODEL: "whisper/large-v3"
   WHISPER_TIMEOUT_SECONDS: "600"
   LANGUAGE: "ru"
   SUMMARY_ENABLED: "false"

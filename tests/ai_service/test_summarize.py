@@ -75,3 +75,10 @@ def test_malformed_200_wrong_shape_is_infrastructure(service_config):
     respx.post(URL).mock(return_value=httpx.Response(200, json={"error": "quota"}))
     with pytest.raises(InfrastructureError):
         summarize(service_config(), "текст")
+
+
+@respx.mock
+def test_429_is_infrastructure(service_config):
+    respx.post(URL).mock(return_value=httpx.Response(429, json={"error": "rate limited"}))
+    with pytest.raises(InfrastructureError):
+        summarize(service_config(), "текст")
