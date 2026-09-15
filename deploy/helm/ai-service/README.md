@@ -146,7 +146,7 @@ and the Secret are checksummed into the pod template, so changing either trigger
 | `persistence.storageClass` | `local-path` | pinned; NFS is unsafe for SQLite |
 | `persistence.size` | `1Gi` | |
 | `persistence.existingClaim` | `""` | reuse a PVC instead of creating one |
-| `nodeSelector` | `kubernetes.io/hostname: mow2ksw24` | **required with local-path** — the PV is node-local; see below |
+| `nodeSelector` | `kubernetes.io/hostname: mow2ksw25` | **required with local-path** — the PV is node-local; see below |
 | `config.WHISPER_API_URL` | `http://whisper-api:8000/v1` | in-cluster whisper-api Service |
 | `config.BPM_CALLBACK_URL` | example | **must** be set to your BPM endpoint |
 | `secrets.existingSecret` | `""` | reference a pre-created Secret |

@@ -187,6 +187,6 @@ extraEnv: []
 # Moving the pod to a different node means starting from an EMPTY job queue;
 # copy /opt/local-path-provisioner/<pv>_<ns>_<pvc>/jobs.db across first.
 nodeSelector:
-  kubernetes.io/hostname: mow2ksw24
+  kubernetes.io/hostname: mow2ksw25
 tolerations: []
 affinity: {}
