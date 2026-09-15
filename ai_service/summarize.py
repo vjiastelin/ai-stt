@@ -30,7 +30,8 @@ def summarize(cfg: ServiceConfig, transcript_text: str) -> str:
     except httpx.HTTPError as exc:
         raise InfrastructureError(f"LLM request failed: {exc}") from exc
 
-    if response.status_code >= 500:
+    if response.status_code >= 500 or response.status_code == 429:
+        # 429 is the LLM gateway being busy (rate/concurrency limit), not bad input.
         raise InfrastructureError(f"LLM returned {response.status_code}")
     if response.status_code >= 400:
         raise PermanentJobError(f"LLM returned {response.status_code}: {response.text[:500]}")
