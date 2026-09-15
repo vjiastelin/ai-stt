@@ -7,7 +7,7 @@
       "component": "ai-service",
       "package-name": "ai-service",
       "extra-files": [
-        "deploy/helm/ai-service/Chart.yaml"
+        "/deploy/helm/ai-service/Chart.yaml"
       ]
     },
     "whisper_api": {

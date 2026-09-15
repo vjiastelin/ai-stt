@@ -4,7 +4,20 @@
 Зависимостей на инфраструктуру нет: gauges очереди пересчитываются из SQLite на
 каждом scrape, счётчики/гистограммы обновляются worker'ом по ходу pipeline.
 
-Пример scrape-конфига:
+## Как метрики попадают в Prometheus
+
+**В Kubernetes** scrape настраивать вручную не нужно: Helm-чарт создаёт
+`ServiceMonitor` (`metrics.serviceMonitor.enabled`, по умолчанию `true`), который
+подхватывает kube-prometheus-stack. Метка `release: prometheus-stack` обязательна —
+без неё оператор молча игнорирует объект. Подробнее о трёх шагах выбора цели:
+[чарт README](../deploy/helm/ai-service/README.md#monitoring).
+
+Итоговая метка `job` — это имя Service, то есть `<release>-ai-service`
+(например `ai-stt-ai-service`); именно на неё опираются дашборд и алерт
+`AiServiceDown`.
+
+**Вне Kubernetes** (docker-compose, локальный запуск) — обычный статический
+scrape-конфиг:
 
 ```yaml
 scrape_configs:
@@ -29,7 +42,34 @@ scrape_configs:
 | `ai_service_transcribe_rtf` | histogram | Real-time factor: время транскрипции ÷ длительность аудио. Чистая метрика GPU, не зависит от длины звонков. |
 | `ai_service_audio_seconds_total` | counter | Суммарные секунды обработанного аудио. |
 
+## Дашборд и алерты в Grafana
+
+Дашборд и алерты живут **не в этом репозитории**: по принятой в кластере схеме это
+Grafana-managed ресурсы на `grafana-ai.aeroclub.int`, версионируемые в репозитории
+`services-ai-grafana` (там же — остальные дашборды и правила).
+
+| Что | Где |
+|---|---|
+| Дашборд | `AI STT — Transcription Pipeline`, uid `ai-stt`, папка `AI Services` |
+| Алерты | 7 Grafana-правил в той же папке, группы `Every 1 minute` / `Every 5 minutes` |
+| Маршрутизация | по меткам `team: recsys` + `severity`; критичные → recsys-бот |
+| Экспорт в git | `services-ai-grafana/grafana-ai.aeroclub.int/` (скрипт `export.sh`) |
+
+Два следствия, о которых легко забыть при чтении дашборда:
+
+- `ai_service_queue_jobs{status="done"|"failed"}` — **накопительные итоги за всё
+  время** (строки из SQLite не удаляются), а не текущее состояние очереди. Рядом с
+  `queued`/`processing`/`delivering` их выводить нельзя.
+- `stage_duration_seconds_count` считает только **успешные** прогоны этапа (ошибки
+  в гистограмму не попадают, см. `observe_stage`), поэтому доля ошибок этапа —
+  `stage_errors_total / (stage_errors_total + stage_duration_count)`.
+- Правила `severity != critical` попадают под существующее mute-расписание
+  `Off-hours` (Europe/Moscow 18:00–09:00 и выходные) на маршруте `recsys`.
+
 ## Алерты (PromQL)
+
+Ниже — исходные выражения и обоснование порогов. **Это справочник**: сами правила
+созданы в Grafana (см. выше), а не как `PrometheusRule` в кластере.
 
 Пороги основаны на нагрузочном тестировании (пик 100 звонков/час, среднее время
 обработки 16 с/задача, ёмкость ~228/час ⇒ ~44% утилизации в пик):

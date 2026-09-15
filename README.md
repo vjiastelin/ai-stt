@@ -54,7 +54,13 @@ with `200`).
 ai-service exposes Prometheus metrics at `GET /metrics` (port 8080): queue depth
 per state, oldest-queued age, per-stage latency histograms, transcription
 real-time factor, end-to-end delivery time, and error counters by the retry
-taxonomy. Metric reference and ready-made PromQL alert rules: [docs/metrics.md](docs/metrics.md).
+taxonomy. Metric reference, PromQL, and threshold rationale: [docs/metrics.md](docs/metrics.md).
+
+In Kubernetes the Helm chart creates a `ServiceMonitor`, so kube-prometheus-stack
+scrapes the target with no extra configuration. The Grafana dashboard
+(`AI STT — Transcription Pipeline`, uid `ai-stt`) and its 7 alert rules live on
+`grafana-ai.aeroclub.int` and are versioned in the `services-ai-grafana` repo — the
+cluster convention — not in this one.
 
 ## Releases
 

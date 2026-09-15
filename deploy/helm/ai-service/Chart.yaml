@@ -6,7 +6,7 @@ type: application
 version: 0.1.0
 # Tracks the ai-service image release; drives the default image tag.
 # Kept in lockstep with ai_service/version.txt by release-please (extra-files).
-appVersion: "0.4.0" # x-release-please-version
+appVersion: "0.6.1" # x-release-please-version
 home: https://github.com/vjiastelin/ai-stt
 sources:
   - https://github.com/vjiastelin/ai-stt
