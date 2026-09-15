@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.6.0...ai-service-v0.6.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* use llm-proxy model id whisper/large-v3 and retry 429 ([#18](https://github.com/vjiastelin/ai-stt/issues/18)) ([2664c88](https://github.com/vjiastelin/ai-stt/commit/2664c88373c57e222e8fe7e7bf2edd4004178566))
+
 ## [0.6.0](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.5.1...ai-service-v0.6.0) (2026-08-04)
 
 
