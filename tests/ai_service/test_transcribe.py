@@ -93,3 +93,14 @@ def test_authorization_header_absent_by_default(service_config, wav):
     route = respx.post(URL).mock(return_value=httpx.Response(200, json=VERBOSE_JSON))
     transcribe_file(service_config(), wav)
     assert "Authorization" not in route.calls.last.request.headers
+
+
+@respx.mock
+def test_429_is_infrastructure(service_config, wav):
+    # Gateways rate-limit per API key (llm-proxy caps concurrency); that is the
+    # dependency being busy, not bad input — retry forever, don't burn attempts.
+    respx.post(URL).mock(
+        return_value=httpx.Response(429, json={"detail": {"error": {"type": "rate_limit_error"}}})
+    )
+    with pytest.raises(InfrastructureError):
+        transcribe_file(service_config(), wav)

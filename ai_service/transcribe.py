@@ -35,8 +35,13 @@ def transcribe_file(cfg: ServiceConfig, audio_path: Path) -> Transcription:
     except httpx.HTTPError as exc:
         raise InfrastructureError(f"whisper-api request failed: {exc}") from exc
 
-    if response.status_code >= 500:
-        raise InfrastructureError(f"whisper-api returned {response.status_code}")
+    if response.status_code >= 500 or response.status_code == 429:
+        # 429: the gateway is rate-limiting this key (llm-proxy caps concurrency
+        # per key). The dependency is busy, not the input bad — retry forever
+        # instead of spending one of the job's attempts.
+        raise InfrastructureError(
+            f"whisper-api returned {response.status_code}: {response.text[:200]}"
+        )
     if response.status_code >= 400:
         raise PermanentJobError(
             f"whisper-api returned {response.status_code}: {response.text[:500]}"
