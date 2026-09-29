@@ -22,6 +22,14 @@ Two services:
   FullText (plus FullText as a `{CallRecordId}.txt` attachment), or the error
   reason for a failed job. Each channel is retried independently until it
   accepts; one that already accepted is not resent.
+  **Bucket scanner (optional):** with `S3_SCAN_URL=s3://bucket/prefix/` the
+  service also polls that prefix every `S3_SCAN_INTERVAL_SECONDS` (300) and
+  queues each *new* `.mp3`/`.wav` object exactly once — seen keys are stored in
+  the job DB, so scans are incremental and survive restarts, and a failed job is
+  not re-queued by the next scan. `S3_SCAN_MODIFIED_AFTER` skips older objects
+  (e.g. the historical backlog). Scanned jobs get a stable UUID `CallRecordId`
+  derived from the object path; BPM doesn't know those ids, so deliver them by
+  email (the message shows the file path).
   Inspection endpoints: `GET /jobs` (list, newest first, `?status=` filter +
   `limit`/`offset`), `GET /jobs/{CallRecordId}` (status), and
   `GET /jobs/{CallRecordId}/result` (the `Summary` and `FullText`).

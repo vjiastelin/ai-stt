@@ -61,6 +61,18 @@ AUDIO_SECONDS = Counter(
     "ai_service_audio_seconds_total",
     "Total seconds of audio transcribed",
 )
+S3_SCAN_DISCOVERED = Counter(
+    "ai_service_s3_scan_discovered_total",
+    "Recordings found by the S3 bucket scanner and queued",
+)
+S3_SCAN_ERRORS = Counter(
+    "ai_service_s3_scan_errors_total",
+    "Failed S3 bucket scans (retried on the next interval)",
+)
+S3_SCAN_LAST_SUCCESS = Gauge(
+    "ai_service_s3_scan_last_success_timestamp_seconds",
+    "Unix time of the last successful S3 bucket scan (0 = never / scanner off)",
+)
 QUEUE_JOBS = Gauge(
     "ai_service_queue_jobs",
     "Jobs currently in each state (recomputed on scrape)",

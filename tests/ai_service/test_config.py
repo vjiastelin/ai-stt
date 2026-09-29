@@ -121,3 +121,27 @@ def test_verify_ssl_defaults_on_and_can_be_disabled():
     assert (cfg.whisper_verify_ssl, cfg.llm_verify_ssl) == (True, True)
     cfg = load_config({**REQUIRED, "WHISPER_VERIFY_SSL": "false", "LLM_VERIFY_SSL": "0"})
     assert (cfg.whisper_verify_ssl, cfg.llm_verify_ssl) == (False, False)
+
+
+def test_s3_scan_disabled_by_default():
+    cfg = load_config(REQUIRED)
+    assert cfg.s3_scan_enabled is False
+    assert cfg.s3_scan_interval_seconds == 300
+    assert cfg.s3_scan_modified_after is None
+
+
+def test_s3_scan_url_parsed():
+    cfg = load_config({**REQUIRED, "S3_SCAN_URL": "s3://calls/2026/in/",
+                       "S3_SCAN_INTERVAL_SECONDS": "60",
+                       "S3_SCAN_MODIFIED_AFTER": "2026-09-01"})
+    assert (cfg.s3_scan_enabled, cfg.s3_scan_bucket, cfg.s3_scan_prefix) == (True, "calls", "2026/in/")
+    assert cfg.s3_scan_interval_seconds == 60
+    assert cfg.s3_scan_modified_after.isoformat() == "2026-09-01T00:00:00+00:00"
+    assert load_config({**REQUIRED, "S3_SCAN_URL": "s3://calls"}).s3_scan_prefix == ""
+
+
+@pytest.mark.parametrize("env", [{"S3_SCAN_URL": "https://calls/x"}, {"S3_SCAN_URL": "s3:///x"},
+                                 {"S3_SCAN_URL": "s3://calls", "S3_SCAN_MODIFIED_AFTER": "вчера"}])
+def test_invalid_s3_scan_config_raises(env):
+    with pytest.raises(ConfigError, match="S3_SCAN"):
+        load_config({**REQUIRED, **env})

@@ -187,11 +187,13 @@ def sent_emails(monkeypatch):
 
     outbox = Outbox()
 
-    def fake_deliver(cfg, call_record_id, summary, full_text, error=False, error_description=""):
+    def fake_deliver(cfg, call_record_id, summary, full_text, error=False, error_description="",
+                     call_record_url=""):
         if outbox.fail:
             raise InfrastructureError("smtp down")
         outbox.append(dict(id=call_record_id, summary=summary, full_text=full_text,
-                           error=error, error_description=error_description))
+                           error=error, error_description=error_description,
+                           url=call_record_url))
 
     monkeypatch.setattr(mailer, "deliver", fake_deliver)
     return outbox
@@ -217,7 +219,8 @@ def test_email_only_delivers_by_email(env, service_config, monkeypatch, sent_ema
     assert store.get("id-1").status == "done"
     assert not bpm.called
     assert sent_emails == [dict(id="id-1", summary="суть", full_text="[00:00:00] текст",
-                                error=False, error_description="")]
+                                error=False, error_description="",
+                                url="s3://call-records/rec.mp3")]
 
 
 @respx.mock
@@ -291,3 +294,22 @@ def test_wav_record_is_uploaded_as_wav(env):
     body = whisper.calls.last.request.content
     assert b'filename="audio.wav"' in body
     assert b"Content-Type: audio/wav" in body
+
+
+@respx.mock
+def test_scanned_recording_is_processed(env, service_config):
+    from ai_service.scanner import Scanner
+
+    store, worker = env
+    s3 = boto3.client("s3", region_name="us-east-1")
+    s3.put_object(Bucket="call-records", Key="in/звонок #1.wav", Body=b"RIFF-fake")
+    whisper = respx.post(WHISPER_URL).mock(return_value=httpx.Response(200, json=VERBOSE_JSON))
+    respx.post(LLM_URL).mock(return_value=httpx.Response(200, json=CHAT_RESPONSE))
+    scanner = Scanner(service_config(s3_scan_bucket="call-records", s3_scan_prefix="in/"), store, s3)
+
+    assert scanner.scan_once() == 1
+    assert worker.run_once() is True
+
+    [job] = store.list_jobs()
+    assert job.status == "delivering"
+    assert b'filename="audio.wav"' in whisper.calls.last.request.content

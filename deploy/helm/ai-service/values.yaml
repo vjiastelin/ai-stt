@@ -132,6 +132,10 @@ probes:
 # LLM_API_URL + LLM_MODEL.
 config:
   S3_ENDPOINT_URL: "https://s3.yandexcloud.net"
+  # optional bucket scanner (queues each new .mp3/.wav once; see .env.example)
+  # S3_SCAN_URL: "s3://call-records/2026/"
+  # S3_SCAN_INTERVAL_SECONDS: "300"
+  # S3_SCAN_MODIFIED_AFTER: "2026-09-01T00:00:00Z"
   # External whisper-api host (authenticated with WHISPER_API_KEY in the Secret).
   # For an in-cluster deployment instead, use "http://whisper-api:8000/v1".
   WHISPER_API_URL: "http://llm-proxy.aeroclub.int/v1"
