@@ -19,6 +19,19 @@ CREATE TABLE IF NOT EXISTS jobs (
 )
 """
 
+# objects the bucket scanner has already turned into jobs (keeps scans incremental:
+# a key is enqueued once, so a failed job is never silently re-queued by a rescan)
+_S3_OBJECTS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS s3_objects (
+    bucket          TEXT NOT NULL,
+    key             TEXT NOT NULL,
+    etag            TEXT,
+    call_record_id  TEXT NOT NULL,
+    discovered_at   TEXT NOT NULL,
+    PRIMARY KEY (bucket, key)
+)
+"""
+
 # columns added after the first release; ALTERed into pre-existing databases on open
 _MIGRATIONS = {
     "delivered_to": "ALTER TABLE jobs ADD COLUMN delivered_to TEXT NOT NULL DEFAULT ''",
@@ -63,6 +76,7 @@ class JobStore:
         self._lock = threading.Lock()
         with self._lock:
             self._conn.execute(_SCHEMA)
+            self._conn.execute(_S3_OBJECTS_SCHEMA)
             columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(jobs)")}
             for column, ddl in _MIGRATIONS.items():
                 if column not in columns:
@@ -107,6 +121,41 @@ class JobStore:
                     error=None,
                 )
             return self._fetch(call_record_id)
+
+    def known_s3_keys(self, bucket: str, prefix: str = "") -> set[str]:
+        """Keys under bucket/prefix the scanner has already enqueued."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT key FROM s3_objects WHERE bucket = ? AND substr(key, 1, ?) = ?",
+                (bucket, len(prefix), prefix),
+            ).fetchall()
+            return {row["key"] for row in rows}
+
+    def enqueue_discovered(
+        self, bucket: str, key: str, etag: str | None, call_record_id: str, call_record_url: str
+    ) -> bool:
+        """Atomically remember a scanned object and queue its job.
+
+        Returns False when the object was already known. A job that already
+        exists under this id (e.g. POSTed by hand) is left as it is.
+        """
+        now = _now()
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT OR IGNORE INTO s3_objects (bucket, key, etag, call_record_id,"
+                " discovered_at) VALUES (?, ?, ?, ?, ?)",
+                (bucket, key, etag, call_record_id, now),
+            )
+            if cur.rowcount == 0:
+                self._conn.commit()
+                return False
+            self._conn.execute(
+                "INSERT OR IGNORE INTO jobs (call_record_id, call_record_url, status, attempts,"
+                " created_at, updated_at) VALUES (?, ?, 'queued', 0, ?, ?)",
+                (call_record_id, call_record_url, now, now),
+            )
+            self._conn.commit()
+            return True
 
     def get(self, call_record_id: str) -> Job | None:
         with self._lock:

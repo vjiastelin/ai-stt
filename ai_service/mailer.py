@@ -14,6 +14,7 @@ def build_message(
     full_text: str,
     error: bool = False,
     error_description: str = "",
+    call_record_url: str = "",
 ) -> EmailMessage:
     msg = EmailMessage()
     msg["From"] = cfg.email_from
@@ -21,12 +22,15 @@ def build_message(
     if error:
         msg["Subject"] = f"Ошибка транскрибации звонка {call_record_id}"
         msg.set_content(
-            f"Не удалось транскрибировать запись разговора {call_record_id}.\n\n"
-            f"Причина: {error_description}\n"
+            f"Не удалось транскрибировать запись разговора {call_record_id}.\n"
+            + (f"Файл: {call_record_url}\n" if call_record_url else "")
+            + f"\nПричина: {error_description}\n"
         )
         return msg
     msg["Subject"] = f"Транскрибация звонка {call_record_id}"
     parts = [f"Запись разговора: {call_record_id}"]
+    if call_record_url:
+        parts[0] += f"\nФайл: {call_record_url}"
     if summary:
         parts.append(f"Краткое содержание:\n{summary}")
     parts.append(f"Транскрипт:\n{full_text}")
@@ -56,8 +60,11 @@ def deliver(
     full_text: str,
     error: bool = False,
     error_description: str = "",
+    call_record_url: str = "",
 ) -> None:
-    msg = build_message(cfg, call_record_id, summary, full_text, error, error_description)
+    msg = build_message(
+        cfg, call_record_id, summary, full_text, error, error_description, call_record_url
+    )
     try:
         with _connect(cfg) as client:
             if cfg.smtp_username:

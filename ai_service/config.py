@@ -1,7 +1,9 @@
 """ai-service configuration from environment variables (spec §3.4)."""
 import os
+import urllib.parse
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 DEFAULT_SUMMARY_PROMPT = (
     "Составь краткое содержание телефонного разговора на русском языке: "
@@ -19,6 +21,11 @@ class ServiceConfig:
     s3_endpoint_url: str
     s3_access_key: str
     s3_secret_key: str
+    # optional bucket scanner: s3://bucket[/prefix] polled for new recordings
+    s3_scan_bucket: str
+    s3_scan_prefix: str
+    s3_scan_interval_seconds: int
+    s3_scan_modified_after: datetime | None
     whisper_api_url: str
     whisper_model: str
     whisper_timeout_seconds: int
@@ -50,6 +57,10 @@ class ServiceConfig:
     log_level: str
 
     @property
+    def s3_scan_enabled(self) -> bool:
+        return bool(self.s3_scan_bucket)
+
+    @property
     def bpm_enabled(self) -> bool:
         return bool(self.bpm_callback_url)
 
@@ -72,6 +83,26 @@ _SMTP_DEFAULT_PORTS = {"starttls": 587, "ssl": 465, "none": 25}
 def _flag(env: Mapping[str, str], name: str, default: bool) -> bool:
     raw = env.get(name, "").strip().lower()
     return default if not raw else raw in ("1", "true", "yes")
+
+
+def _parse_scan_url(url: str) -> tuple[str, str]:
+    if not url:
+        return "", ""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "s3" or not parsed.netloc:
+        raise ConfigError(f"S3_SCAN_URL must look like s3://bucket[/prefix]: {url!r}")
+    return parsed.netloc, parsed.path.lstrip("/")
+
+
+def _parse_datetime(env: Mapping[str, str], name: str) -> datetime | None:
+    raw = env.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        value = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ConfigError(f"{name} must be an ISO 8601 date/time: {raw!r}") from exc
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
@@ -102,11 +133,16 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
     else:
         smtp_host, email_from, email_to = "", env.get("EMAIL_FROM", ""), ()
     smtp_port = env.get("SMTP_PORT", "").strip()
+    s3_scan_bucket, s3_scan_prefix = _parse_scan_url(env.get("S3_SCAN_URL", "").strip())
 
     return ServiceConfig(
         s3_endpoint_url=_require(env, "S3_ENDPOINT_URL"),
         s3_access_key=_require(env, "S3_ACCESS_KEY"),
         s3_secret_key=_require(env, "S3_SECRET_KEY"),
+        s3_scan_bucket=s3_scan_bucket,
+        s3_scan_prefix=s3_scan_prefix,
+        s3_scan_interval_seconds=int(env.get("S3_SCAN_INTERVAL_SECONDS", "300")),
+        s3_scan_modified_after=_parse_datetime(env, "S3_SCAN_MODIFIED_AFTER"),
         whisper_api_url=env.get("WHISPER_API_URL", "http://whisper-api:8000/v1").rstrip("/"),
         whisper_model=env.get("WHISPER_MODEL", "large-v3"),
         whisper_timeout_seconds=int(env.get("WHISPER_TIMEOUT_SECONDS", "600")),

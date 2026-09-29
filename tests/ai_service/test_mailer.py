@@ -120,3 +120,12 @@ def test_smtp_failures_are_infrastructure_errors(email_config, fake_smtp, exc):
     fake_smtp.fail_with = exc
     with pytest.raises(InfrastructureError):
         mailer.deliver(email_config(), "id-1", "s", "t")
+
+
+def test_source_file_shown_when_known(email_config):
+    ok = mailer.build_message(email_config(), "id-1", "s", "t", call_record_url="s3://calls/a.mp3")
+    assert "Файл: s3://calls/a.mp3" in ok.get_body(("plain",)).get_content()
+    err = mailer.build_message(email_config(), "id-1", "", "", error=True,
+                               error_description="boom", call_record_url="s3://calls/a.mp3")
+    assert "Файл: s3://calls/a.mp3" in err.get_content()
+    assert "Файл:" not in mailer.build_message(email_config(), "id-1", "s", "t").get_body(("plain",)).get_content()

@@ -135,18 +135,19 @@ class Worker:
             job.call_record_id, time.monotonic() - started, len(result.segments),
         )
 
-    def _channels(self):
-        """Enabled delivery channels as (name, metrics stage, deliver fn)."""
+    def _channels(self, job: Job):
+        """Enabled delivery channels as (name, metrics stage, deliver fn, extra kwargs)."""
         if self.cfg.bpm_enabled:
-            yield "bpm", "callback", callback.deliver
+            yield "bpm", "callback", callback.deliver, {}
         if self.cfg.email_enabled:
-            yield "email", "email", mailer.deliver
+            # scanned recordings have a synthetic id: the file path tells the reader which call
+            yield "email", "email", mailer.deliver, {"call_record_url": job.call_record_url}
 
     def _deliver(self, job: Job) -> None:
         # a delivering job with no transcript is a failure routed here to notify BPM/email
         is_error = job.full_text is None
         done = job.delivered_channels
-        for channel, stage, deliver in self._channels():
+        for channel, stage, deliver, extra in self._channels(job):
             if channel in done:
                 continue  # accepted on an earlier attempt: don't resend
             with metrics.observe_stage(stage):
@@ -157,6 +158,7 @@ class Worker:
                     job.full_text or "",
                     error=is_error,
                     error_description=job.error or "" if is_error else "",
+                    **extra,
                 )
             self.store.mark_delivered_to(job.call_record_id, channel)
             logger.info(
