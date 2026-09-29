@@ -26,6 +26,7 @@ def summarize(cfg: ServiceConfig, transcript_text: str) -> str:
             json=payload,
             headers=headers,
             timeout=cfg.llm_timeout_seconds,
+            verify=cfg.llm_verify_ssl,
         )
     except httpx.HTTPError as exc:
         raise InfrastructureError(f"LLM request failed: {exc}") from exc

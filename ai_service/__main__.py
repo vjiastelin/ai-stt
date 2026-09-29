@@ -22,6 +22,12 @@ def main() -> None:
         cfg.bpm_callback_url or "-",
         ",".join(cfg.email_to) if cfg.email_enabled else "-", cfg.db_path,
     )
+    for name, verify in (("WHISPER", cfg.whisper_verify_ssl), ("LLM", cfg.llm_verify_ssl)):
+        if not verify:
+            logging.getLogger(__name__).warning(
+                "%s_VERIFY_SSL=false: TLS certificates of the %s endpoint are NOT verified",
+                name, name.lower(),
+            )
     store = JobStore(cfg.db_path)
     worker = Worker(cfg, store, make_client(cfg))
     threading.Thread(target=worker.run_forever, name="worker", daemon=True).start()

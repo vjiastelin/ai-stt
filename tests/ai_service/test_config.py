@@ -114,3 +114,10 @@ def test_url_trailing_slashes_stripped():
     cfg = load_config({**REQUIRED, "WHISPER_API_URL": "http://w:8000/v1/", "LLM_API_URL": "http://l:8000/v1/"})
     assert cfg.whisper_api_url == "http://w:8000/v1"
     assert cfg.llm_api_url == "http://l:8000/v1"
+
+
+def test_verify_ssl_defaults_on_and_can_be_disabled():
+    cfg = load_config(REQUIRED)
+    assert (cfg.whisper_verify_ssl, cfg.llm_verify_ssl) == (True, True)
+    cfg = load_config({**REQUIRED, "WHISPER_VERIFY_SSL": "false", "LLM_VERIFY_SSL": "0"})
+    assert (cfg.whisper_verify_ssl, cfg.llm_verify_ssl) == (False, False)

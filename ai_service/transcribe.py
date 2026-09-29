@@ -33,6 +33,7 @@ def transcribe_file(cfg: ServiceConfig, audio_path: Path) -> Transcription:
                 data=data,
                 headers=headers,
                 timeout=cfg.whisper_timeout_seconds,
+                verify=cfg.whisper_verify_ssl,
             )
     except httpx.HTTPError as exc:
         raise InfrastructureError(f"whisper-api request failed: {exc}") from exc

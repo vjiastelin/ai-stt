@@ -23,12 +23,14 @@ class ServiceConfig:
     whisper_model: str
     whisper_timeout_seconds: int
     whisper_api_key: str
+    whisper_verify_ssl: bool
     language: str
     summary_enabled: bool
     llm_api_url: str
     llm_api_key: str
     llm_model: str
     llm_timeout_seconds: int
+    llm_verify_ssl: bool
     summary_prompt: str
     bpm_callback_url: str
     bpm_csrf_token: str
@@ -65,6 +67,11 @@ def _require(env: Mapping[str, str], name: str) -> str:
 
 SMTP_SECURITY_MODES = ("starttls", "ssl", "none")
 _SMTP_DEFAULT_PORTS = {"starttls": 587, "ssl": 465, "none": 25}
+
+
+def _flag(env: Mapping[str, str], name: str, default: bool) -> bool:
+    raw = env.get(name, "").strip().lower()
+    return default if not raw else raw in ("1", "true", "yes")
 
 
 def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
@@ -104,12 +111,15 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         whisper_model=env.get("WHISPER_MODEL", "large-v3"),
         whisper_timeout_seconds=int(env.get("WHISPER_TIMEOUT_SECONDS", "600")),
         whisper_api_key=env.get("WHISPER_API_KEY", ""),
+        # false accepts self-signed/mismatched certs (ephemeral GPU instances)
+        whisper_verify_ssl=_flag(env, "WHISPER_VERIFY_SSL", True),
         language=env.get("LANGUAGE", "ru"),
         summary_enabled=summary_enabled,
         llm_api_url=llm_api_url,
         llm_api_key=env.get("LLM_API_KEY", ""),
         llm_model=llm_model,
         llm_timeout_seconds=int(env.get("LLM_TIMEOUT_SECONDS", "120")),
+        llm_verify_ssl=_flag(env, "LLM_VERIFY_SSL", True),
         summary_prompt=env.get("SUMMARY_PROMPT", DEFAULT_SUMMARY_PROMPT),
         bpm_callback_url=bpm_callback_url,
         bpm_csrf_token=env.get("BPM_CSRF_TOKEN", ""),

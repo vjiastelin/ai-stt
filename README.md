@@ -32,6 +32,11 @@ Two services:
   via `TRANSCRIBE_OPTIONS` (JSON), and it can serve HTTPS via `SSL_CERTFILE`/
   `SSL_KEYFILE` — see `.env.example`.
 
+Whisper and LLM endpoints behind self-signed certificates (e.g. ephemeral GPU
+instances reached by IP) can be used with `WHISPER_VERIFY_SSL=false` /
+`LLM_VERIFY_SSL=false`: traffic stays encrypted but the server is not
+authenticated, and a warning is logged at startup.
+
 Summaries come from an external OpenAI-compatible LLM (`LLM_API_URL`);
 set `SUMMARY_ENABLED=false` to skip summarization (Summary is sent as `""`).
 

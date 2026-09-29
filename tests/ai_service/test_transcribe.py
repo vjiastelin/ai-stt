@@ -104,3 +104,17 @@ def test_429_is_infrastructure(service_config, wav):
     )
     with pytest.raises(InfrastructureError):
         transcribe_file(service_config(), wav)
+
+
+@pytest.mark.parametrize("verify", [True, False])
+def test_verify_ssl_passed_to_httpx(service_config, wav, monkeypatch, verify):
+    seen = {}
+
+    def fake_post(*args, **kwargs):
+        seen.update(kwargs)
+        raise httpx.ConnectError("stop")
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    with pytest.raises(InfrastructureError):
+        transcribe_file(service_config(whisper_verify_ssl=verify), wav)
+    assert seen["verify"] is verify
