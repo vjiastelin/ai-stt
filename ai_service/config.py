@@ -1,4 +1,5 @@
 """ai-service configuration from environment variables (spec §3.4)."""
+import json
 import os
 import urllib.parse
 from collections.abc import Mapping
@@ -38,6 +39,9 @@ class ServiceConfig:
     llm_model: str
     llm_timeout_seconds: int
     llm_verify_ssl: bool
+    # extra fields merged into the chat/completions request body, e.g.
+    # {"chat_template_kwargs": {"enable_thinking": false}, "max_tokens": 1024}
+    llm_extra_body: dict
     summary_prompt: str
     bpm_callback_url: str
     bpm_csrf_token: str
@@ -105,6 +109,25 @@ def _parse_datetime(env: Mapping[str, str], name: str) -> datetime | None:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
+def _parse_llm_extra_body(env: Mapping[str, str]) -> dict:
+    raw = env.get("LLM_EXTRA_BODY", "").strip()
+    if not raw:
+        return {}
+    try:
+        body = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ConfigError(f"LLM_EXTRA_BODY is not valid JSON: {exc}") from exc
+    if not isinstance(body, dict):
+        raise ConfigError("LLM_EXTRA_BODY must be a JSON object")
+    reserved = {"model", "messages"} & body.keys()
+    if reserved:
+        raise ConfigError(
+            f"LLM_EXTRA_BODY must not set {', '.join(sorted(reserved))} "
+            "(use LLM_MODEL / SUMMARY_PROMPT)"
+        )
+    return body
+
+
 def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
     summary_enabled = env.get("SUMMARY_ENABLED", "true").strip().lower() in ("1", "true", "yes")
     if summary_enabled:
@@ -156,6 +179,7 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         llm_model=llm_model,
         llm_timeout_seconds=int(env.get("LLM_TIMEOUT_SECONDS", "120")),
         llm_verify_ssl=_flag(env, "LLM_VERIFY_SSL", True),
+        llm_extra_body=_parse_llm_extra_body(env),
         summary_prompt=env.get("SUMMARY_PROMPT", DEFAULT_SUMMARY_PROMPT),
         bpm_callback_url=bpm_callback_url,
         bpm_csrf_token=env.get("BPM_CSRF_TOKEN", ""),

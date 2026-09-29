@@ -152,6 +152,8 @@ config:
   LLM_MODEL: "qwen2.5-32b-instruct"
   LLM_TIMEOUT_SECONDS: "120"
   # LLM_VERIFY_SSL: "true"
+  # JSON merged into the LLM request, e.g. disable Qwen3 thinking + cap output:
+  # LLM_EXTRA_BODY: '{"chat_template_kwargs":{"enable_thinking":false},"max_tokens":1024}'
   # SUMMARY_PROMPT: ""   # falls back to the Russian default in config.py
   # base URL of the BPM host; the result path (…/transcriptions/{id}/result) is fixed in code
   BPM_CALLBACK_URL: "http://mow2crm6:5000"

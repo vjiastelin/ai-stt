@@ -1,8 +1,22 @@
 """Summary generation via an OpenAI-compatible chat endpoint (spec §3.3 step 5)."""
+import re
+
 import httpx
 
 from ai_service.config import ServiceConfig
 from ai_service.errors import InfrastructureError, PermanentJobError
+
+
+# reasoning models served without a reasoning parser put their chain of thought
+# into `content`; it must not end up in the Summary sent to BPM/email
+_THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+
+def strip_reasoning(text: str) -> str:
+    text = _THINK_BLOCK.sub("", text)
+    if "</think>" in text:  # opening tag lives in the chat template, only the close is emitted
+        text = text.rsplit("</think>", 1)[1]
+    return text.strip()
 
 
 def summarize(cfg: ServiceConfig, transcript_text: str) -> str:
@@ -19,6 +33,7 @@ def summarize(cfg: ServiceConfig, transcript_text: str) -> str:
             {"role": "system", "content": cfg.summary_prompt},
             {"role": "user", "content": transcript_text},
         ],
+        **cfg.llm_extra_body,
     }
     try:
         response = httpx.post(
@@ -38,6 +53,6 @@ def summarize(cfg: ServiceConfig, transcript_text: str) -> str:
         raise PermanentJobError(f"LLM returned {response.status_code}: {response.text[:500]}")
 
     try:
-        return response.json()["choices"][0]["message"]["content"].strip()
+        return strip_reasoning(response.json()["choices"][0]["message"]["content"])
     except (ValueError, KeyError, TypeError, IndexError) as exc:
         raise InfrastructureError(f"LLM returned malformed 200 response: {exc}") from exc

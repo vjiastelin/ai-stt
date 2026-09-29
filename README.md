@@ -47,6 +47,11 @@ authenticated, and a warning is logged at startup.
 
 Summaries come from an external OpenAI-compatible LLM (`LLM_API_URL`);
 set `SUMMARY_ENABLED=false` to skip summarization (Summary is sent as `""`).
+Extra request fields go in `LLM_EXTRA_BODY` (JSON), e.g.
+`{"chat_template_kwargs":{"enable_thinking":false},"max_tokens":1024}` to turn off
+the reasoning of Qwen3-family models, which otherwise can take most of the
+generation time. A `<think>…</think>` block that leaks into the answer is
+stripped before the Summary is stored.
 
 Interactive API docs (Swagger UI) with request/response schemas:
 `http://localhost:8080/docs` (ai-service) and `http://<whisper-api-host>:8000/docs`.
