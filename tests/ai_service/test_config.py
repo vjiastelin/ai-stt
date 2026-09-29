@@ -38,9 +38,67 @@ def test_bpm_callback_url_strips_trailing_slash():
 
 def test_missing_required_var_raises():
     env = dict(REQUIRED)
-    del env["BPM_CALLBACK_URL"]
-    with pytest.raises(ConfigError, match="BPM_CALLBACK_URL"):
+    del env["S3_ENDPOINT_URL"]
+    with pytest.raises(ConfigError, match="S3_ENDPOINT_URL"):
         load_config(env)
+
+
+EMAIL = {"SMTP_HOST": "smtp.example.kz", "EMAIL_FROM": "stt@example.kz", "EMAIL_TO": "a@x.kz"}
+
+
+def test_no_delivery_channel_raises():
+    env = {k: v for k, v in REQUIRED.items() if k != "BPM_CALLBACK_URL"}
+    with pytest.raises(ConfigError, match="no delivery channel"):
+        load_config(env)
+
+
+def test_bpm_only_by_default():
+    cfg = load_config(REQUIRED)
+    assert (cfg.bpm_enabled, cfg.email_enabled) == (True, False)
+    assert cfg.email_to == ()
+
+
+def test_email_only():
+    env = {k: v for k, v in REQUIRED.items() if k != "BPM_CALLBACK_URL"}
+    cfg = load_config({**env, **EMAIL})
+    assert (cfg.bpm_enabled, cfg.email_enabled) == (False, True)
+    assert cfg.bpm_callback_url == ""
+    assert cfg.smtp_host == "smtp.example.kz"
+    assert cfg.smtp_port == 587
+    assert cfg.smtp_security == "starttls"
+    assert cfg.smtp_timeout_seconds == 30
+    assert cfg.email_from == "stt@example.kz"
+    assert cfg.email_to == ("a@x.kz",)
+
+
+def test_bpm_and_email():
+    cfg = load_config({**REQUIRED, **EMAIL})
+    assert (cfg.bpm_enabled, cfg.email_enabled) == (True, True)
+
+
+def test_email_to_is_comma_separated():
+    cfg = load_config({**REQUIRED, **EMAIL, "EMAIL_TO": " a@x.kz, b@x.kz ,"})
+    assert cfg.email_to == ("a@x.kz", "b@x.kz")
+
+
+@pytest.mark.parametrize("missing", ["SMTP_HOST", "EMAIL_FROM", "EMAIL_TO"])
+def test_partial_email_config_raises(missing):
+    env = {**REQUIRED, **EMAIL}
+    del env[missing]
+    with pytest.raises(ConfigError, match=missing):
+        load_config(env)
+
+
+@pytest.mark.parametrize("security,port", [("ssl", 465), ("none", 25), ("starttls", 587)])
+def test_smtp_port_defaults_follow_security(security, port):
+    cfg = load_config({**REQUIRED, **EMAIL, "SMTP_SECURITY": security})
+    assert cfg.smtp_port == port
+    assert load_config({**REQUIRED, **EMAIL, "SMTP_SECURITY": security, "SMTP_PORT": "2525"}).smtp_port == 2525
+
+
+def test_invalid_smtp_security_raises():
+    with pytest.raises(ConfigError, match="SMTP_SECURITY"):
+        load_config({**REQUIRED, **EMAIL, "SMTP_SECURITY": "tls"})
 
 
 def test_llm_vars_required_only_when_summary_enabled():

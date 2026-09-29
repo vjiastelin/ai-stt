@@ -36,9 +36,9 @@ scrape_configs:
 | `ai_service_jobs_enqueued_total` | counter | Принятые запросы `/requestTranscription` (включая повторную постановку failed). |
 | `ai_service_jobs_resolved_total{status}` | counter | Задачи, достигшие терминального состояния (`done`/`failed`). |
 | `ai_service_job_retries_total{kind}` | counter | Ретраи: `infrastructure` (зависимость недоступна, не считается против задачи) / `permanent` (плохой вход, инкрементирует attempts). |
-| `ai_service_stage_duration_seconds{stage}` | histogram | Длительность успешных этапов: `download`, `transcribe`, `summarize`, `callback`. Ошибки в гистограмму не попадают. |
+| `ai_service_stage_duration_seconds{stage}` | histogram | Длительность успешных этапов: `download`, `transcribe`, `summarize`, `callback` (BPM), `email` (SMTP). Ошибки в гистограмму не попадают. |
 | `ai_service_stage_errors_total{stage,kind}` | counter | Ошибки этапов по таксономии. |
-| `ai_service_job_end_to_end_seconds` | histogram | От постановки в очередь до успешной доставки в BPM. |
+| `ai_service_job_end_to_end_seconds` | histogram | От постановки в очередь до успешной доставки во все включённые каналы (BPM/email). |
 | `ai_service_transcribe_rtf` | histogram | Real-time factor: время транскрипции ÷ длительность аудио. Чистая метрика GPU, не зависит от длины звонков. |
 | `ai_service_audio_seconds_total` | counter | Суммарные секунды обработанного аудио. |
 
@@ -109,7 +109,7 @@ groups:
           increase(ai_service_jobs_resolved_total{status="failed"}[24h])
             / clamp_min(increase(ai_service_jobs_enqueued_total[24h]), 1) > 0.01
 
-      # BPM не принимает результаты — delivering копится
+      # BPM или SMTP не принимает результаты — delivering копится
       - alert: CallbackStuck
         expr: ai_service_queue_jobs{status="delivering"} > 5
         for: 10m

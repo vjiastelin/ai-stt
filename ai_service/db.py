@@ -14,9 +14,15 @@ CREATE TABLE IF NOT EXISTS jobs (
     full_text       TEXT,
     summary         TEXT,
     created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL
+    updated_at      TEXT NOT NULL,
+    delivered_to    TEXT NOT NULL DEFAULT ''
 )
 """
+
+# columns added after the first release; ALTERed into pre-existing databases on open
+_MIGRATIONS = {
+    "delivered_to": "ALTER TABLE jobs ADD COLUMN delivered_to TEXT NOT NULL DEFAULT ''",
+}
 
 
 @dataclass(frozen=True)
@@ -30,6 +36,13 @@ class Job:
     summary: str | None
     created_at: str
     updated_at: str
+    # comma-separated delivery channels ("bpm", "email") that already accepted the
+    # current result, so a retry resends only to the channels that failed
+    delivered_to: str = ""
+
+    @property
+    def delivered_channels(self) -> set[str]:
+        return {c for c in self.delivered_to.split(",") if c}
 
 
 def _now() -> str:
@@ -50,6 +63,10 @@ class JobStore:
         self._lock = threading.Lock()
         with self._lock:
             self._conn.execute(_SCHEMA)
+            columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(jobs)")}
+            for column, ddl in _MIGRATIONS.items():
+                if column not in columns:
+                    self._conn.execute(ddl)
             self._conn.commit()
 
     def _row_to_job(self, row) -> Job:
@@ -151,6 +168,7 @@ class JobStore:
                 full_text=full_text,
                 summary=summary,
                 error=None,  # clear any error left by an earlier transient retry
+                delivered_to="",
                 status="delivering",
             )
 
@@ -162,7 +180,13 @@ class JobStore:
         only once BPM has acknowledged the error.
         """
         with self._lock:
-            self._update(call_record_id, error=error, status="delivering")
+            self._update(call_record_id, error=error, delivered_to="", status="delivering")
+
+    def mark_delivered_to(self, call_record_id: str, channel: str) -> None:
+        """Record that one delivery channel accepted the job's current result."""
+        with self._lock:
+            channels = self._fetch(call_record_id).delivered_channels | {channel}
+            self._update(call_record_id, delivered_to=",".join(sorted(channels)))
 
     def increment_attempts(self, call_record_id: str, error: str) -> int:
         with self._lock:

@@ -3,7 +3,7 @@
 BPM-driven speech-to-text service. BPMSoft(Omni) pushes a transcription
 request; the service downloads the call record (MP3, ~5 min / ~4.5 MB typical,
 ~850 calls/day) from S3-compatible storage, transcribes it, optionally
-summarizes it, and posts the result back to BPM. `CallRecordUrl` must point
+summarizes it, and delivers the result to BPM and/or by email. `CallRecordUrl` must point
 to an `.mp3` object — anything else is rejected with 400.
 
 Two services:
@@ -16,6 +16,12 @@ Two services:
   200). A permanently-failed job is reported the same way with `Error: true`
   and the reason in `ErrorDescription`. When `BPM_CSRF_TOKEN` is set it is sent
   as the `x-api-key` request header.
+  **Delivery channels** are chosen by configuration: BPM when `BPM_CALLBACK_URL`
+  is set, email (SMTP) when `SMTP_HOST` + `EMAIL_FROM` + `EMAIL_TO` are set,
+  both when both are — at least one is required. The email carries Summary and
+  FullText (plus FullText as a `{CallRecordId}.txt` attachment), or the error
+  reason for a failed job. Each channel is retried independently until it
+  accepts; one that already accepted is not resent.
   Inspection endpoints: `GET /jobs` (list, newest first, `?status=` filter +
   `limit`/`offset`), `GET /jobs/{CallRecordId}` (status), and
   `GET /jobs/{CallRecordId}/result` (the `Summary` and `FullText`).
@@ -36,7 +42,7 @@ Design spec: `docs/superpowers/specs/2026-07-06-ai-stt-bpm-integration-design.md
 
 ## Run
 
-    cp .env.example .env   # fill in S3, BPM callback, LLM endpoint
+    cp .env.example .env   # fill in S3, BPM callback and/or SMTP, LLM endpoint
     docker compose up --build
 
 First start downloads the Whisper model into the `model-cache` volume.
@@ -47,7 +53,8 @@ A `failed` job (see `GET /jobs/{id}`) is retried by re-POSTing
 BPM's result endpoint should be idempotent: delivery is at-least-once, so the
 same `{Summary, FullText, Error, ErrorDescription}` payload may be posted more
 than once (e.g. after a retry that BPM actually received but did not acknowledge
-with `200`).
+with `200`). The same holds for email: a message may be sent twice if the SMTP
+server accepted it but the connection dropped before the reply.
 
 ## Monitoring
 

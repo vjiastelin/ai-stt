@@ -39,7 +39,7 @@ JOB_RETRIES = Counter(
 STAGE_DURATION = Histogram(
     "ai_service_stage_duration_seconds",
     "Duration of successful pipeline stages",
-    ["stage"],  # download | transcribe | summarize | callback
+    ["stage"],  # download | transcribe | summarize | callback | email
     buckets=(0.5, 1, 2.5, 5, 10, 20, 40, 60, 120, 300, 600),
 )
 STAGE_ERRORS = Counter(
@@ -49,7 +49,7 @@ STAGE_ERRORS = Counter(
 )
 E2E_SECONDS = Histogram(
     "ai_service_job_end_to_end_seconds",
-    "Enqueue (created_at) to successful delivery to BPM",
+    "Enqueue (created_at) to successful delivery to all channels (BPM/email)",
     buckets=(5, 15, 30, 60, 120, 300, 600, 1200, 3600),
 )
 TRANSCRIBE_RTF = Histogram(

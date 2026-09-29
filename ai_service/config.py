@@ -33,11 +33,27 @@ class ServiceConfig:
     bpm_callback_url: str
     bpm_csrf_token: str
     callback_timeout_seconds: int
+    smtp_host: str
+    smtp_port: int
+    smtp_security: str
+    smtp_username: str
+    smtp_password: str
+    smtp_timeout_seconds: int
+    email_from: str
+    email_to: tuple[str, ...]
     max_retries: int
     retry_backoff_cap_seconds: int
     db_path: str
     port: int
     log_level: str
+
+    @property
+    def bpm_enabled(self) -> bool:
+        return bool(self.bpm_callback_url)
+
+    @property
+    def email_enabled(self) -> bool:
+        return bool(self.smtp_host)
 
 
 def _require(env: Mapping[str, str], name: str) -> str:
@@ -45,6 +61,10 @@ def _require(env: Mapping[str, str], name: str) -> str:
     if not value:
         raise ConfigError(f"missing required environment variable: {name}")
     return value
+
+
+SMTP_SECURITY_MODES = ("starttls", "ssl", "none")
+_SMTP_DEFAULT_PORTS = {"starttls": 587, "ssl": 465, "none": 25}
 
 
 def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
@@ -55,6 +75,27 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
     else:
         llm_api_url = env.get("LLM_API_URL", "").rstrip("/")
         llm_model = env.get("LLM_MODEL", "")
+
+    # delivery channels: each is enabled by setting its variables; at least one is required
+    bpm_callback_url = env.get("BPM_CALLBACK_URL", "").strip().rstrip("/")
+    email_enabled = bool(env.get("SMTP_HOST", "").strip() or env.get("EMAIL_TO", "").strip())
+    if not bpm_callback_url and not email_enabled:
+        raise ConfigError(
+            "no delivery channel configured: set BPM_CALLBACK_URL and/or SMTP_HOST + EMAIL_TO"
+        )
+    smtp_security = env.get("SMTP_SECURITY", "starttls").strip().lower()
+    if smtp_security not in SMTP_SECURITY_MODES:
+        raise ConfigError(
+            f"SMTP_SECURITY must be one of {', '.join(SMTP_SECURITY_MODES)}: {smtp_security!r}"
+        )
+    if email_enabled:
+        smtp_host = _require(env, "SMTP_HOST")
+        email_from = _require(env, "EMAIL_FROM")
+        email_to = tuple(a.strip() for a in _require(env, "EMAIL_TO").split(",") if a.strip())
+    else:
+        smtp_host, email_from, email_to = "", env.get("EMAIL_FROM", ""), ()
+    smtp_port = env.get("SMTP_PORT", "").strip()
+
     return ServiceConfig(
         s3_endpoint_url=_require(env, "S3_ENDPOINT_URL"),
         s3_access_key=_require(env, "S3_ACCESS_KEY"),
@@ -70,9 +111,17 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         llm_model=llm_model,
         llm_timeout_seconds=int(env.get("LLM_TIMEOUT_SECONDS", "120")),
         summary_prompt=env.get("SUMMARY_PROMPT", DEFAULT_SUMMARY_PROMPT),
-        bpm_callback_url=_require(env, "BPM_CALLBACK_URL").rstrip("/"),
+        bpm_callback_url=bpm_callback_url,
         bpm_csrf_token=env.get("BPM_CSRF_TOKEN", ""),
         callback_timeout_seconds=int(env.get("CALLBACK_TIMEOUT_SECONDS", "30")),
+        smtp_host=smtp_host,
+        smtp_port=int(smtp_port) if smtp_port else _SMTP_DEFAULT_PORTS[smtp_security],
+        smtp_security=smtp_security,
+        smtp_username=env.get("SMTP_USERNAME", ""),
+        smtp_password=env.get("SMTP_PASSWORD", ""),
+        smtp_timeout_seconds=int(env.get("SMTP_TIMEOUT_SECONDS", "30")),
+        email_from=email_from,
+        email_to=email_to,
         max_retries=int(env.get("MAX_RETRIES", "3")),
         retry_backoff_cap_seconds=int(env.get("RETRY_BACKOFF_CAP_SECONDS", "300")),
         db_path=env.get("DB_PATH", "/data/jobs.db"),

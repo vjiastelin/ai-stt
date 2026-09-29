@@ -17,9 +17,10 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     logging.getLogger(__name__).info(
-        "starting ai-service: whisper=%s summary=%s llm=%s callback=%s db=%s",
+        "starting ai-service: whisper=%s summary=%s llm=%s callback=%s email=%s db=%s",
         cfg.whisper_api_url, cfg.summary_enabled, cfg.llm_api_url or "-",
-        cfg.bpm_callback_url, cfg.db_path,
+        cfg.bpm_callback_url or "-",
+        ",".join(cfg.email_to) if cfg.email_enabled else "-", cfg.db_path,
     )
     store = JobStore(cfg.db_path)
     worker = Worker(cfg, store, make_client(cfg))
