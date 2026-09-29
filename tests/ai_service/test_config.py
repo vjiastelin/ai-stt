@@ -145,3 +145,18 @@ def test_s3_scan_url_parsed():
 def test_invalid_s3_scan_config_raises(env):
     with pytest.raises(ConfigError, match="S3_SCAN"):
         load_config({**REQUIRED, **env})
+
+
+def test_llm_extra_body_parsed():
+    assert load_config(REQUIRED).llm_extra_body == {}
+    cfg = load_config({**REQUIRED, "LLM_EXTRA_BODY":
+                       '{"chat_template_kwargs":{"enable_thinking":false},"max_tokens":1024}'})
+    assert cfg.llm_extra_body == {"chat_template_kwargs": {"enable_thinking": False},
+                                  "max_tokens": 1024}
+
+
+@pytest.mark.parametrize("raw,match", [("{nope", "not valid JSON"), ("[1]", "JSON object"),
+                                       ('{"model":"x"}', "must not set model")])
+def test_invalid_llm_extra_body_raises(raw, match):
+    with pytest.raises(ConfigError, match=match):
+        load_config({**REQUIRED, "LLM_EXTRA_BODY": raw})
