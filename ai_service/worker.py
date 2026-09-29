@@ -95,7 +95,8 @@ class Worker:
             return
         try:
             with tempfile.TemporaryDirectory() as tmp:
-                audio_path = Path(tmp) / "audio.mp3"
+                # keep the extension: whisper-api picks the demuxer by file name
+                audio_path = Path(tmp) / f"audio{s3io.audio_suffix(key)}"
                 with metrics.observe_stage("download"):
                     s3io.download(self.s3, bucket, key, audio_path)
                 transcribe_started = time.monotonic()

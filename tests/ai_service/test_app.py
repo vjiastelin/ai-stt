@@ -40,7 +40,7 @@ def test_request_transcription_is_idempotent(client_and_store):
         {"CallRecordUrl": "s3://bucket/rec.mp3"},
         {"CallRecordId": "", "CallRecordUrl": "s3://bucket/rec.mp3"},
         {"CallRecordId": "id-1", "CallRecordUrl": "ftp://x/y.mp3"},
-        {"CallRecordId": "id-1", "CallRecordUrl": "s3://bucket/rec.wav"},  # mp3-only policy
+        {"CallRecordId": "id-1", "CallRecordUrl": "s3://bucket/rec.ogg"},  # mp3/wav only
     ],
 )
 def test_request_transcription_400_on_invalid(client_and_store, body):
@@ -143,3 +143,10 @@ def test_list_jobs_endpoint_status_filter(client_and_store):
 def test_list_jobs_endpoint_rejects_bad_status(client_and_store):
     client, _ = client_and_store
     assert client.get("/jobs?status=bogus").status_code == 400
+
+
+@pytest.mark.parametrize("key", ["rec.mp3", "rec.wav", "REC.WAV"])
+def test_request_transcription_accepts_mp3_and_wav(client_and_store, key):
+    client, _ = client_and_store
+    body = {"CallRecordId": "id-1", "CallRecordUrl": f"s3://bucket/{key}"}
+    assert client.post("/requestTranscription", json=body).status_code == 200

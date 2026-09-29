@@ -273,3 +273,21 @@ def test_failure_notification_goes_to_email_too(env, service_config, monkeypatch
     assert json.loads(bpm.calls.last.request.content)["Error"] is True
     assert sent_emails[0]["error"] is True
     assert sent_emails[0]["error_description"] == "corrupt audio"
+
+
+@respx.mock
+def test_wav_record_is_uploaded_as_wav(env):
+    store, worker = env
+    boto3.client("s3", region_name="us-east-1").put_object(
+        Bucket="call-records", Key="rec.wav", Body=b"RIFF-fake"
+    )
+    whisper = respx.post(WHISPER_URL).mock(return_value=httpx.Response(200, json=VERBOSE_JSON))
+    respx.post(LLM_URL).mock(return_value=httpx.Response(200, json=CHAT_RESPONSE))
+    store.enqueue("id-1", "s3://call-records/rec.wav")
+
+    assert worker.run_once() is True
+
+    assert store.get("id-1").status == "delivering"
+    body = whisper.calls.last.request.content
+    assert b'filename="audio.wav"' in body
+    assert b"Content-Type: audio/wav" in body

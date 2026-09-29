@@ -4,7 +4,7 @@ BPM-driven speech-to-text service. BPMSoft(Omni) pushes a transcription
 request; the service downloads the call record (MP3, ~5 min / ~4.5 MB typical,
 ~850 calls/day) from S3-compatible storage, transcribes it, optionally
 summarizes it, and delivers the result to BPM and/or by email. `CallRecordUrl` must point
-to an `.mp3` object — anything else is rejected with 400.
+to an `.mp3` or `.wav` object — anything else is rejected with 400.
 
 Two services:
 
