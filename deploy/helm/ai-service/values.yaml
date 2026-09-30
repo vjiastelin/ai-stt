@@ -157,6 +157,8 @@ config:
   # JSON merged into the LLM request, e.g. disable Qwen3 thinking + cap output:
   # LLM_EXTRA_BODY: '{"chat_template_kwargs":{"enable_thinking":false},"max_tokens":1024}'
   # SUMMARY_PROMPT: ""   # falls back to the Russian default in config.py
+  # client companies → e-mail domains, rendered into SUMMARY_PROMPT at {KNOWN_EMAIL_DOMAINS}
+  # KNOWN_EMAIL_DOMAINS: "Аэроклуб|Аэроклуб ИТ=aeroclub.ru; Ромашка=romashka-group.ru"
   # base URL of the BPM host; the result path (…/transcriptions/{id}/result) is fixed in code
   BPM_CALLBACK_URL: "http://mow2crm6:5000"
   CALLBACK_TIMEOUT_SECONDS: "30"

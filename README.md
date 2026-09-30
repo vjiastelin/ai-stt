@@ -52,6 +52,11 @@ names makes Whisper keep `@` and domains in dictated addresses.
 
 Summaries come from an external OpenAI-compatible LLM (`LLM_API_URL`);
 set `SUMMARY_ENABLED=false` to skip summarization (Summary is sent as `""`).
+`KNOWN_EMAIL_DOMAINS` (`"Company|Alias=domain.ru; Other=other.com"`) is a
+maintainable list of client companies and their corporate e-mail domains; it is
+rendered into `SUMMARY_PROMPT` at the `{KNOWN_EMAIL_DOMAINS}` placeholder (or
+appended when the prompt has none), so the LLM can complete a dictated address
+whose domain was lost without guessing domains for other companies.
 Extra request fields go in `LLM_EXTRA_BODY` (JSON), e.g.
 `{"chat_template_kwargs":{"enable_thinking":false},"max_tokens":1024}` to turn off
 the reasoning of Qwen3-family models, which otherwise can take most of the

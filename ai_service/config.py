@@ -1,6 +1,7 @@
 """ai-service configuration from environment variables (spec §3.4)."""
 import json
 import os
+import re
 import urllib.parse
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -11,6 +12,11 @@ DEFAULT_SUMMARY_PROMPT = (
     "основная тема, договорённости, следующие шаги. "
     "Отвечай только текстом краткого содержания."
 )
+
+
+# placeholder in SUMMARY_PROMPT replaced by the rendered KNOWN_EMAIL_DOMAINS list
+KNOWN_DOMAINS_PLACEHOLDER = "{KNOWN_EMAIL_DOMAINS}"
+_DOMAIN_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$")
 
 
 class ConfigError(Exception):
@@ -130,6 +136,38 @@ def _parse_llm_extra_body(env: Mapping[str, str]) -> dict:
     return body
 
 
+def parse_known_domains(raw: str) -> list[tuple[list[str], str]]:
+    """KNOWN_EMAIL_DOMAINS: "Company|Alias=domain.ru; Other=other.com" → [(names, domain)]."""
+    entries = []
+    for chunk in raw.split(";"):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        names_part, sep, domain = chunk.rpartition("=")
+        names = [n.strip() for n in names_part.split("|") if n.strip()]
+        domain = domain.strip().lower()
+        if not sep or not names or not _DOMAIN_RE.match(domain):
+            raise ConfigError(
+                f"KNOWN_EMAIL_DOMAINS entry must look like 'Компания|Синоним=domain.ru': {chunk!r}"
+            )
+        entries.append((names, domain))
+    return entries
+
+
+def render_summary_prompt(prompt: str, known_domains: list[tuple[list[str], str]]) -> str:
+    """Put the known-domain list into the prompt at {KNOWN_EMAIL_DOMAINS}.
+
+    Without the placeholder a non-empty list is appended as a last sentence, so
+    the variable still has an effect with a prompt that predates it.
+    """
+    rendered = "; ".join(f"{', '.join(names)} → {domain}" for names, domain in known_domains)
+    if KNOWN_DOMAINS_PLACEHOLDER in prompt:
+        return prompt.replace(KNOWN_DOMAINS_PLACEHOLDER, rendered or "список пуст")
+    if rendered:
+        return f"{prompt}\nИзвестные корпоративные домены клиентов: {rendered}."
+    return prompt
+
+
 def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
     summary_enabled = env.get("SUMMARY_ENABLED", "true").strip().lower() in ("1", "true", "yes")
     if summary_enabled:
@@ -183,7 +221,10 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         llm_timeout_seconds=int(env.get("LLM_TIMEOUT_SECONDS", "120")),
         llm_verify_ssl=_flag(env, "LLM_VERIFY_SSL", True),
         llm_extra_body=_parse_llm_extra_body(env),
-        summary_prompt=env.get("SUMMARY_PROMPT", DEFAULT_SUMMARY_PROMPT),
+        summary_prompt=render_summary_prompt(
+            env.get("SUMMARY_PROMPT", DEFAULT_SUMMARY_PROMPT),
+            parse_known_domains(env.get("KNOWN_EMAIL_DOMAINS", "")),
+        ),
         bpm_callback_url=bpm_callback_url,
         bpm_csrf_token=env.get("BPM_CSRF_TOKEN", ""),
         callback_timeout_seconds=int(env.get("CALLBACK_TIMEOUT_SECONDS", "30")),
