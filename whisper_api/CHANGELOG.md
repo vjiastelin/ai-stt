@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0](https://github.com/vjiastelin/ai-stt/compare/whisper-api-v0.4.1...whisper-api-v0.5.0) (2026-09-30)
+
+
+### Features
+
+* deliver results by email in addition to (or instead of) BPM ([af3c3c0](https://github.com/vjiastelin/ai-stt/commit/af3c3c03ace663211a4a8ecd09394be2bace3bc2))
+* WHISPER_PROMPT vocabulary hint for Whisper (OpenAI `prompt` field) ([#25](https://github.com/vjiastelin/ai-stt/issues/25)) ([2b34257](https://github.com/vjiastelin/ai-stt/commit/2b342575c6c98c71745d96ba84f62be20f034f7d))
+
 ## [0.4.1](https://github.com/vjiastelin/ai-stt/compare/whisper-api-v0.4.0...whisper-api-v0.4.1) (2026-07-21)
 
 
