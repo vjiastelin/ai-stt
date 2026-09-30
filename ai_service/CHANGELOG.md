@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.0](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.6.1...ai-service-v0.7.0) (2026-09-30)
+
+
+### Features
+
+* accept .wav call records in addition to .mp3 ([d80257d](https://github.com/vjiastelin/ai-stt/commit/d80257dd554ba2673834bf1eaaca468670ddcf3d))
+* deliver results by email in addition to (or instead of) BPM ([af3c3c0](https://github.com/vjiastelin/ai-stt/commit/af3c3c03ace663211a4a8ecd09394be2bace3bc2))
+* deliver results by email in addition to (or instead of) BPM ([e907188](https://github.com/vjiastelin/ai-stt/commit/e90718879efb88d7426f8e3a0079036e2463d710))
+* incremental S3 bucket scanner as a second way to start transcriptions ([#23](https://github.com/vjiastelin/ai-stt/issues/23)) ([6dba1fe](https://github.com/vjiastelin/ai-stt/commit/6dba1feedb51dc96a5676b260e76caecd1415d65))
+* LLM_EXTRA_BODY for extra LLM request fields; strip &lt;think&gt; from summaries ([#24](https://github.com/vjiastelin/ai-stt/issues/24)) ([d2076ff](https://github.com/vjiastelin/ai-stt/commit/d2076ff904f14a9119ec2ae97d4c3fea2d99e73a))
+* show the caller phone parsed from the IVR file name in emails ([7a93448](https://github.com/vjiastelin/ai-stt/commit/7a93448cc410bbfbb02827c4f207ea7c29a0bdae))
+* WHISPER_PROMPT vocabulary hint for Whisper (OpenAI `prompt` field) ([#25](https://github.com/vjiastelin/ai-stt/issues/25)) ([2b34257](https://github.com/vjiastelin/ai-stt/commit/2b342575c6c98c71745d96ba84f62be20f034f7d))
+* WHISPER_VERIFY_SSL / LLM_VERIFY_SSL to accept self-signed certs ([4fe25dd](https://github.com/vjiastelin/ai-stt/commit/4fe25dd17625b6d096a077d76eb5b4f463294c36))
+
 ## [0.6.1](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.6.0...ai-service-v0.6.1) (2026-09-15)
 
 
