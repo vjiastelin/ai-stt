@@ -36,11 +36,19 @@ Design spec: `docs/superpowers/specs/2026-07-06-ai-stt-bpm-integration-design.md
 
 ## Run
 
-    cp .env.example .env   # fill in S3, BPM callback, LLM endpoint
+    cp .env.example .env   # fill in S3, BPM callback, LLM endpoint, WHISPER_API_URL
     docker compose up --build
 
+By default compose runs **ai-service only**, against the external whisper-api
+set by `WHISPER_API_URL` (+ `WHISPER_API_KEY`). To build and run whisper-api
+locally as well, leave `WHISPER_API_URL` unset and enable the profile:
+
+    docker compose --profile local-whisper up --build
+
+ai-service then waits for whisper-api to become healthy (Compose >= 2.20).
 First start downloads the Whisper model into the `model-cache` volume.
-On CPU-only hosts, set `DEVICE=cpu` in `.env` (the default is `cuda`).
+On CPU-only hosts, set `DEVICE=cpu` in `.env` (the default is `cuda`); on GPU
+hosts uncomment the `deploy:` block of `whisper-api` in `docker-compose.yml`.
 A `failed` job (see `GET /jobs/{id}`) is retried by re-POSTing
 `/requestTranscription` with the same `CallRecordId`.
 
@@ -127,7 +135,7 @@ image, so mount it at runtime; and the image is built `--no-dev`, so layer the
 dev deps on with `uv run` (needs network to fetch pytest/jiwer):
 
     # uncomment the GPU `deploy:` block in docker-compose.yml first
-    docker compose run --rm -v "$PWD/tests:/app/tests" whisper-api \
+    docker compose --profile local-whisper run --rm -v "$PWD/tests:/app/tests" whisper-api \
       uv run --extra api --extra dev pytest tests/whisper_api/test_wer.py -m slow -s
 
 To run locally instead (CPU `large-v3`, much slower), install faster-whisper
