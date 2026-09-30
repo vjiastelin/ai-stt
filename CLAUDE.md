@@ -9,7 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 .venv/bin/pytest                       # fast suite — `addopts = -m 'not slow'` excludes slow tests
 .venv/bin/pytest tests/ai_service/test_worker.py -k retry   # single file / test
 .venv/bin/pytest -m slow               # real-model tests; needs `pip install faster-whisper` first
-docker compose up --build              # run both services (whisper model downloads on first start)
+docker compose up --build              # ai-service only, against external WHISPER_API_URL
+docker compose --profile local-whisper up --build   # + local whisper-api (model downloads on first start)
 ```
 
 There is no linter or formatter configured.
@@ -21,7 +22,7 @@ docker run --rm -v "$PWD":/app -w /app --entrypoint sh \
   python:3.11-slim -c "pip install -q uv && uv lock"
 ```
 
-The WER accuracy test (`tests/whisper_api/test_wer.py`, `slow`, report-only — no pass/fail gate) should run inside the `whisper-api` container for GPU/env parity; see README "WER accuracy test" for the exact `docker compose run` incantation (tests/ must be volume-mounted because `.dockerignore` excludes them from the image).
+The WER accuracy test (`tests/whisper_api/test_wer.py`, `slow`, report-only — no pass/fail gate) should run inside the `whisper-api` container for GPU/env parity; see README "WER accuracy test" for the exact `docker compose --profile local-whisper run` incantation (tests/ must be volume-mounted because `.dockerignore` excludes them from the image).
 
 ## Architecture
 
