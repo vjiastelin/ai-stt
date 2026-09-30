@@ -82,3 +82,48 @@ def test_429_is_infrastructure(service_config):
     respx.post(URL).mock(return_value=httpx.Response(429, json={"error": "rate limited"}))
     with pytest.raises(InfrastructureError):
         summarize(service_config(), "текст")
+
+
+@pytest.mark.parametrize("verify", [True, False])
+def test_verify_ssl_passed_to_httpx(service_config, monkeypatch, verify):
+    seen = {}
+
+    def fake_post(*args, **kwargs):
+        seen.update(kwargs)
+        raise httpx.ConnectError("stop")
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    with pytest.raises(InfrastructureError):
+        summarize(service_config(llm_verify_ssl=verify), "текст")
+    assert seen["verify"] is verify
+
+
+@respx.mock
+def test_extra_body_merged_into_request(service_config):
+    route = respx.post(URL).mock(return_value=httpx.Response(200, json=CHAT_RESPONSE))
+    extra = {"chat_template_kwargs": {"enable_thinking": False}, "max_tokens": 1024,
+             "temperature": 0}
+    summarize(service_config(llm_extra_body=extra), "текст")
+
+    import json
+
+    body = json.loads(route.calls.last.request.content)
+    assert body["chat_template_kwargs"] == {"enable_thinking": False}
+    assert body["max_tokens"] == 1024
+    assert body["temperature"] == 0  # extra body overrides the built-in default
+    assert body["model"] == "test-model"
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "<think>\nрассуждаю…\n</think>\n\nИтог.",
+        "рассуждаю без открывающего тега…</think>Итог.",
+        "  Итог.  ",
+    ],
+)
+@respx.mock
+def test_reasoning_is_stripped_from_summary(service_config, content):
+    reply = {"choices": [{"message": {"role": "assistant", "content": content}}]}
+    respx.post(URL).mock(return_value=httpx.Response(200, json=reply))
+    assert summarize(service_config(), "текст") == "Итог."

@@ -5,7 +5,7 @@ import threading
 import time
 from pathlib import Path
 
-from ai_service import callback, formats, metrics, s3io, summarize, transcribe
+from ai_service import callback, formats, mailer, metrics, s3io, summarize, transcribe
 from ai_service.config import ServiceConfig
 from ai_service.db import Job, JobStore
 from ai_service.errors import InfrastructureError, PermanentJobError
@@ -81,7 +81,7 @@ class Worker:
             worked = True
 
         if not worked and delivery_error is not None:
-            raise delivery_error  # nothing else to do: back off instead of hammering BPM
+            raise delivery_error  # nothing else to do: back off instead of hammering BPM/SMTP
         return worked
 
     def _process(self, job: Job) -> None:
@@ -95,7 +95,8 @@ class Worker:
             return
         try:
             with tempfile.TemporaryDirectory() as tmp:
-                audio_path = Path(tmp) / "audio.mp3"
+                # keep the extension: whisper-api picks the demuxer by file name
+                audio_path = Path(tmp) / f"audio{s3io.audio_suffix(key)}"
                 with metrics.observe_stage("download"):
                     s3io.download(self.s3, bucket, key, audio_path)
                 transcribe_started = time.monotonic()
@@ -134,23 +135,39 @@ class Worker:
             job.call_record_id, time.monotonic() - started, len(result.segments),
         )
 
+    def _channels(self, job: Job):
+        """Enabled delivery channels as (name, metrics stage, deliver fn, extra kwargs)."""
+        if self.cfg.bpm_enabled:
+            yield "bpm", "callback", callback.deliver, {}
+        if self.cfg.email_enabled:
+            # scanned recordings have a synthetic id: the file path tells the reader which call
+            yield "email", "email", mailer.deliver, {"call_record_url": job.call_record_url}
+
     def _deliver(self, job: Job) -> None:
-        # a delivering job with no transcript is a failure routed here to notify BPM
+        # a delivering job with no transcript is a failure routed here to notify BPM/email
         is_error = job.full_text is None
-        with metrics.observe_stage("callback"):
-            callback.deliver(
-                self.cfg,
-                job.call_record_id,
-                job.summary or "",
-                job.full_text or "",
-                error=is_error,
-                error_description=job.error or "" if is_error else "",
+        done = job.delivered_channels
+        for channel, stage, deliver, extra in self._channels(job):
+            if channel in done:
+                continue  # accepted on an earlier attempt: don't resend
+            with metrics.observe_stage(stage):
+                deliver(
+                    self.cfg,
+                    job.call_record_id,
+                    job.summary or "",
+                    job.full_text or "",
+                    error=is_error,
+                    error_description=job.error or "" if is_error else "",
+                    **extra,
+                )
+            self.store.mark_delivered_to(job.call_record_id, channel)
+            logger.info(
+                "delivered %s of %s to %s",
+                "failure" if is_error else "result", job.call_record_id, channel,
             )
         if is_error:
             self.store.set_status(job.call_record_id, "failed")
             metrics.JOBS_RESOLVED.labels(status="failed").inc()
-            logger.info("delivered failure of %s to BPM", job.call_record_id)
         else:
             self.store.set_status(job.call_record_id, "done")
             metrics.observe_delivered(job.created_at)
-            logger.info("delivered %s to BPM", job.call_record_id)

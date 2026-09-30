@@ -148,7 +148,7 @@ and the Secret are checksummed into the pod template, so changing either trigger
 | `persistence.existingClaim` | `""` | reuse a PVC instead of creating one |
 | `nodeSelector` | `kubernetes.io/hostname: mow2ksw25` | **required with local-path** — the PV is node-local; see below |
 | `config.WHISPER_API_URL` | `http://whisper-api:8000/v1` | in-cluster whisper-api Service |
-| `config.BPM_CALLBACK_URL` | example | **must** be set to your BPM endpoint |
+| `config.BPM_CALLBACK_URL` | example | BPM endpoint; set it and/or the `SMTP_*`/`EMAIL_*` email channel (at least one) |
 | `secrets.existingSecret` | `""` | reference a pre-created Secret |
 
 See [`values.yaml`](./values.yaml) for the full list and inline comments.

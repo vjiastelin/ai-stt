@@ -3,8 +3,8 @@
 BPM-driven speech-to-text service. BPMSoft(Omni) pushes a transcription
 request; the service downloads the call record (MP3, ~5 min / ~4.5 MB typical,
 ~850 calls/day) from S3-compatible storage, transcribes it, optionally
-summarizes it, and posts the result back to BPM. `CallRecordUrl` must point
-to an `.mp3` object — anything else is rejected with 400.
+summarizes it, and delivers the result to BPM and/or by email. `CallRecordUrl` must point
+to an `.mp3` or `.wav` object — anything else is rejected with 400.
 
 Two services:
 
@@ -16,6 +16,20 @@ Two services:
   200). A permanently-failed job is reported the same way with `Error: true`
   and the reason in `ErrorDescription`. When `BPM_CSRF_TOKEN` is set it is sent
   as the `x-api-key` request header.
+  **Delivery channels** are chosen by configuration: BPM when `BPM_CALLBACK_URL`
+  is set, email (SMTP) when `SMTP_HOST` + `EMAIL_FROM` + `EMAIL_TO` are set,
+  both when both are — at least one is required. The email carries Summary and
+  FullText (plus FullText as a `{CallRecordId}.txt` attachment), or the error
+  reason for a failed job. Each channel is retried independently until it
+  accepts; one that already accepted is not resent.
+  **Bucket scanner (optional):** with `S3_SCAN_URL=s3://bucket/prefix/` the
+  service also polls that prefix every `S3_SCAN_INTERVAL_SECONDS` (300) and
+  queues each *new* `.mp3`/`.wav` object exactly once — seen keys are stored in
+  the job DB, so scans are incremental and survive restarts, and a failed job is
+  not re-queued by the next scan. `S3_SCAN_MODIFIED_AFTER` skips older objects
+  (e.g. the historical backlog). Scanned jobs get a stable UUID `CallRecordId`
+  derived from the object path; BPM doesn't know those ids, so deliver them by
+  email (the message shows the file path).
   Inspection endpoints: `GET /jobs` (list, newest first, `?status=` filter +
   `limit`/`offset`), `GET /jobs/{CallRecordId}` (status), and
   `GET /jobs/{CallRecordId}/result` (the `Summary` and `FullText`).
@@ -26,8 +40,23 @@ Two services:
   via `TRANSCRIBE_OPTIONS` (JSON), and it can serve HTTPS via `SSL_CERTFILE`/
   `SSL_KEYFILE` — see `.env.example`.
 
+Whisper and LLM endpoints behind self-signed certificates (e.g. ephemeral GPU
+instances reached by IP) can be used with `WHISPER_VERIFY_SSL=false` /
+`LLM_VERIFY_SSL=false`: traffic stays encrypted but the server is not
+authenticated, and a warning is logged at startup.
+
+`WHISPER_PROMPT` is sent as the OpenAI `prompt` field (whisper-api maps it to
+faster-whisper's `initial_prompt`, overriding one set in `TRANSCRIBE_OPTIONS`):
+a short vocabulary hint such as an example e-mail address and company/domain
+names makes Whisper keep `@` and domains in dictated addresses.
+
 Summaries come from an external OpenAI-compatible LLM (`LLM_API_URL`);
 set `SUMMARY_ENABLED=false` to skip summarization (Summary is sent as `""`).
+Extra request fields go in `LLM_EXTRA_BODY` (JSON), e.g.
+`{"chat_template_kwargs":{"enable_thinking":false},"max_tokens":1024}` to turn off
+the reasoning of Qwen3-family models, which otherwise can take most of the
+generation time. A `<think>…</think>` block that leaks into the answer is
+stripped before the Summary is stored.
 
 Interactive API docs (Swagger UI) with request/response schemas:
 `http://localhost:8080/docs` (ai-service) and `http://<whisper-api-host>:8000/docs`.
@@ -36,7 +65,7 @@ Design spec: `docs/superpowers/specs/2026-07-06-ai-stt-bpm-integration-design.md
 
 ## Run
 
-    cp .env.example .env   # fill in S3, BPM callback, LLM endpoint, WHISPER_API_URL
+    cp .env.example .env   # fill in S3, BPM callback and/or SMTP, LLM endpoint
     docker compose up --build
 
 By default compose runs **ai-service only**, against the external whisper-api
@@ -55,7 +84,8 @@ A `failed` job (see `GET /jobs/{id}`) is retried by re-POSTing
 BPM's result endpoint should be idempotent: delivery is at-least-once, so the
 same `{Summary, FullText, Error, ErrorDescription}` payload may be posted more
 than once (e.g. after a retry that BPM actually received but did not acknowledge
-with `200`).
+with `200`). The same holds for email: a message may be sent twice if the SMTP
+server accepted it but the connection dropped before the reply.
 
 ## Monitoring
 

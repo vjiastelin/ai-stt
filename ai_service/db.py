@@ -14,9 +14,28 @@ CREATE TABLE IF NOT EXISTS jobs (
     full_text       TEXT,
     summary         TEXT,
     created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL
+    updated_at      TEXT NOT NULL,
+    delivered_to    TEXT NOT NULL DEFAULT ''
 )
 """
+
+# objects the bucket scanner has already turned into jobs (keeps scans incremental:
+# a key is enqueued once, so a failed job is never silently re-queued by a rescan)
+_S3_OBJECTS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS s3_objects (
+    bucket          TEXT NOT NULL,
+    key             TEXT NOT NULL,
+    etag            TEXT,
+    call_record_id  TEXT NOT NULL,
+    discovered_at   TEXT NOT NULL,
+    PRIMARY KEY (bucket, key)
+)
+"""
+
+# columns added after the first release; ALTERed into pre-existing databases on open
+_MIGRATIONS = {
+    "delivered_to": "ALTER TABLE jobs ADD COLUMN delivered_to TEXT NOT NULL DEFAULT ''",
+}
 
 
 @dataclass(frozen=True)
@@ -30,6 +49,13 @@ class Job:
     summary: str | None
     created_at: str
     updated_at: str
+    # comma-separated delivery channels ("bpm", "email") that already accepted the
+    # current result, so a retry resends only to the channels that failed
+    delivered_to: str = ""
+
+    @property
+    def delivered_channels(self) -> set[str]:
+        return {c for c in self.delivered_to.split(",") if c}
 
 
 def _now() -> str:
@@ -50,6 +76,11 @@ class JobStore:
         self._lock = threading.Lock()
         with self._lock:
             self._conn.execute(_SCHEMA)
+            self._conn.execute(_S3_OBJECTS_SCHEMA)
+            columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(jobs)")}
+            for column, ddl in _MIGRATIONS.items():
+                if column not in columns:
+                    self._conn.execute(ddl)
             self._conn.commit()
 
     def _row_to_job(self, row) -> Job:
@@ -90,6 +121,41 @@ class JobStore:
                     error=None,
                 )
             return self._fetch(call_record_id)
+
+    def known_s3_keys(self, bucket: str, prefix: str = "") -> set[str]:
+        """Keys under bucket/prefix the scanner has already enqueued."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT key FROM s3_objects WHERE bucket = ? AND substr(key, 1, ?) = ?",
+                (bucket, len(prefix), prefix),
+            ).fetchall()
+            return {row["key"] for row in rows}
+
+    def enqueue_discovered(
+        self, bucket: str, key: str, etag: str | None, call_record_id: str, call_record_url: str
+    ) -> bool:
+        """Atomically remember a scanned object and queue its job.
+
+        Returns False when the object was already known. A job that already
+        exists under this id (e.g. POSTed by hand) is left as it is.
+        """
+        now = _now()
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT OR IGNORE INTO s3_objects (bucket, key, etag, call_record_id,"
+                " discovered_at) VALUES (?, ?, ?, ?, ?)",
+                (bucket, key, etag, call_record_id, now),
+            )
+            if cur.rowcount == 0:
+                self._conn.commit()
+                return False
+            self._conn.execute(
+                "INSERT OR IGNORE INTO jobs (call_record_id, call_record_url, status, attempts,"
+                " created_at, updated_at) VALUES (?, ?, 'queued', 0, ?, ?)",
+                (call_record_id, call_record_url, now, now),
+            )
+            self._conn.commit()
+            return True
 
     def get(self, call_record_id: str) -> Job | None:
         with self._lock:
@@ -151,6 +217,7 @@ class JobStore:
                 full_text=full_text,
                 summary=summary,
                 error=None,  # clear any error left by an earlier transient retry
+                delivered_to="",
                 status="delivering",
             )
 
@@ -162,7 +229,13 @@ class JobStore:
         only once BPM has acknowledged the error.
         """
         with self._lock:
-            self._update(call_record_id, error=error, status="delivering")
+            self._update(call_record_id, error=error, delivered_to="", status="delivering")
+
+    def mark_delivered_to(self, call_record_id: str, channel: str) -> None:
+        """Record that one delivery channel accepted the job's current result."""
+        with self._lock:
+            channels = self._fetch(call_record_id).delivered_channels | {channel}
+            self._update(call_record_id, delivered_to=",".join(sorted(channels)))
 
     def increment_attempts(self, call_record_id: str, error: str) -> int:
         with self._lock:

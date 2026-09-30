@@ -7,6 +7,7 @@ import httpx
 from ai_service.config import ServiceConfig
 from ai_service.errors import InfrastructureError, PermanentJobError
 from ai_service.formats import Segment
+from ai_service.s3io import AUDIO_CONTENT_TYPES
 
 
 @dataclass(frozen=True)
@@ -20,17 +21,21 @@ def transcribe_file(cfg: ServiceConfig, audio_path: Path) -> Transcription:
     data = {"model": cfg.whisper_model, "response_format": "verbose_json"}
     if cfg.language:
         data["language"] = cfg.language
+    if cfg.whisper_prompt:
+        data["prompt"] = cfg.whisper_prompt
     headers = {}
     if cfg.whisper_api_key:
         headers["Authorization"] = f"Bearer {cfg.whisper_api_key}"
+    content_type = AUDIO_CONTENT_TYPES.get(audio_path.suffix.lower(), "audio/mpeg")
     try:
         with audio_path.open("rb") as fh:
             response = httpx.post(
                 f"{cfg.whisper_api_url}/audio/transcriptions",
-                files={"file": (audio_path.name, fh, "audio/mpeg")},
+                files={"file": (audio_path.name, fh, content_type)},
                 data=data,
                 headers=headers,
                 timeout=cfg.whisper_timeout_seconds,
+                verify=cfg.whisper_verify_ssl,
             )
     except httpx.HTTPError as exc:
         raise InfrastructureError(f"whisper-api request failed: {exc}") from exc

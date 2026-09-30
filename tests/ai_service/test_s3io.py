@@ -3,7 +3,7 @@ import pytest
 from moto import mock_aws
 
 from ai_service.errors import PermanentJobError
-from ai_service.s3io import download, parse_call_record_url
+from ai_service.s3io import audio_suffix, download, parse_call_record_url
 
 
 def test_parse_s3_scheme():
@@ -41,9 +41,9 @@ def test_parse_unquotes_percent_encoding():
         "https://host/bucket-only",
         "not-a-url",
         "",
-        # strict MP3-only policy: recordings are always mp3
-        "s3://call-records/2026/rec.wav",
+        # strict allow-list: mp3 and wav only
         "s3://call-records/2026/rec.ogg",
+        "s3://call-records/2026/rec.wav.gz",
         "s3://call-records/2026/recording",
     ],
 )
@@ -75,3 +75,16 @@ def test_download_missing_object_is_permanent_error(s3, tmp_path):
 def test_download_missing_bucket_is_permanent_error(s3, tmp_path):
     with pytest.raises(PermanentJobError):
         download(s3, "no-such-bucket", "rec.mp3", tmp_path / "x.mp3")
+
+
+def test_parse_accepts_wav():
+    assert parse_call_record_url("s3://call-records/tmp/anna_test.WAV") == (
+        "call-records", "tmp/anna_test.WAV"
+    )
+
+
+def test_audio_suffix():
+    assert audio_suffix("a/b.MP3") == ".mp3"
+    assert audio_suffix("a/b.wav") == ".wav"
+    with pytest.raises(ValueError):
+        audio_suffix("a/b.ogg")

@@ -108,3 +108,40 @@ def test_list_jobs_limit_and_offset(store):
     page2 = store.list_jobs(limit=2, offset=2)
     assert [j.call_record_id for j in page1] == ["id-4", "id-3"]
     assert [j.call_record_id for j in page2] == ["id-2", "id-1"]
+
+
+def test_mark_delivered_to_accumulates_and_resets_on_new_result(store):
+    store.enqueue("id-1", "s3://b/k.mp3")
+    store.set_result("id-1", "t", "s")
+    store.mark_delivered_to("id-1", "email")
+    store.mark_delivered_to("id-1", "bpm")
+    store.mark_delivered_to("id-1", "bpm")
+    assert store.get("id-1").delivered_channels == {"bpm", "email"}
+    store.set_result("id-1", "t2", "s2")
+    assert store.get("id-1").delivered_channels == set()
+    store.mark_delivered_to("id-1", "bpm")
+    store.set_failed_result("id-1", "boom")
+    assert store.get("id-1").delivered_channels == set()
+
+
+def test_migrates_database_without_delivered_to(tmp_path):
+    import sqlite3
+
+    path = str(tmp_path / "old.db")
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "CREATE TABLE jobs (call_record_id TEXT PRIMARY KEY, call_record_url TEXT NOT NULL,"
+        " status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, error TEXT,"
+        " full_text TEXT, summary TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
+    )
+    conn.execute(
+        "INSERT INTO jobs VALUES ('id-1', 's3://b/k.mp3', 'delivering', 0, NULL, 't', 's',"
+        " '2026-01-01T00:00:00.000000Z', '2026-01-01T00:00:00.000000Z')"
+    )
+    conn.commit()
+    conn.close()
+
+    store = JobStore(path)
+    assert store.get("id-1").delivered_channels == set()
+    store.mark_delivered_to("id-1", "bpm")
+    assert store.get("id-1").delivered_channels == {"bpm"}

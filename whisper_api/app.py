@@ -98,6 +98,7 @@ def create_app(cfg: ApiConfig, engine_factory: Callable | None) -> FastAPI:
         file: UploadFile = File(...),
         model: str = Form(""),
         language: str = Form(""),
+        prompt: str = Form("", description="Vocabulary/style hint (faster-whisper initial_prompt)"),
         response_format: str = Form("verbose_json"),
         authorization: str | None = Header(None),
     ):
@@ -116,7 +117,9 @@ def create_app(cfg: ApiConfig, engine_factory: Callable | None) -> FastAPI:
             tmp.write(contents)
             tmp.flush()
             try:
-                result = await run_in_threadpool(engine.transcribe, tmp.name, language or None)
+                result = await run_in_threadpool(
+                    engine.transcribe, tmp.name, language or None, prompt.strip() or None
+                )
             except InvalidAudioError as exc:
                 logger.warning("invalid or undecodable audio: %s", exc)
                 raise HTTPException(

@@ -126,10 +126,16 @@ probes:
     failureThreshold: 3
 
 # Non-secret environment (mirrors .env.example). Rendered into a ConfigMap.
-# Required by ai_service/config.py: S3_ENDPOINT_URL, BPM_CALLBACK_URL, and
-# (when SUMMARY_ENABLED is truthy) LLM_API_URL + LLM_MODEL.
+# Required by ai_service/config.py: S3_ENDPOINT_URL, at least one delivery
+# channel (BPM_CALLBACK_URL and/or SMTP_HOST + EMAIL_FROM + EMAIL_TO — both set
+# means both receive the result), and (when SUMMARY_ENABLED is truthy)
+# LLM_API_URL + LLM_MODEL.
 config:
   S3_ENDPOINT_URL: "https://s3.yandexcloud.net"
+  # optional bucket scanner (queues each new .mp3/.wav once; see .env.example)
+  # S3_SCAN_URL: "s3://call-records/2026/"
+  # S3_SCAN_INTERVAL_SECONDS: "300"
+  # S3_SCAN_MODIFIED_AFTER: "2026-09-01T00:00:00Z"
   # External whisper-api host (authenticated with WHISPER_API_KEY in the Secret).
   # For an in-cluster deployment instead, use "http://whisper-api:8000/v1".
   WHISPER_API_URL: "http://llm-proxy.aeroclub.int/v1"
@@ -138,15 +144,30 @@ config:
   # Use plain "large-v3" only when talking to our own whisper-api directly.
   WHISPER_MODEL: "whisper/large-v3"
   WHISPER_TIMEOUT_SECONDS: "600"
+  # "false" accepts self-signed / IP-mismatched certs of whisper-api (not verified!)
+  # WHISPER_VERIFY_SSL: "true"
+  # hint for Whisper (OpenAI `prompt` field), e.g. to keep "@" in dictated e-mails
+  # WHISPER_PROMPT: "Клиент диктует корпоративную почту, например: ivan.petrov@aeroclub.ru. Компания Аэроклуб, aeroclub.ru."
   LANGUAGE: "ru"
   SUMMARY_ENABLED: "false"
   LLM_API_URL: "http://vllm.example.kz:8000/v1"
   LLM_MODEL: "qwen2.5-32b-instruct"
   LLM_TIMEOUT_SECONDS: "120"
+  # LLM_VERIFY_SSL: "true"
+  # JSON merged into the LLM request, e.g. disable Qwen3 thinking + cap output:
+  # LLM_EXTRA_BODY: '{"chat_template_kwargs":{"enable_thinking":false},"max_tokens":1024}'
   # SUMMARY_PROMPT: ""   # falls back to the Russian default in config.py
   # base URL of the BPM host; the result path (…/transcriptions/{id}/result) is fixed in code
   BPM_CALLBACK_URL: "http://mow2crm6:5000"
   CALLBACK_TIMEOUT_SECONDS: "30"
+  # email delivery: uncomment to enable (SMTP_PASSWORD goes in the Secret)
+  # SMTP_HOST: "smtp.example.kz"
+  # SMTP_SECURITY: "starttls"   # starttls | ssl | none
+  # SMTP_PORT: ""               # empty = 587 / 465 / 25 by SMTP_SECURITY
+  # SMTP_USERNAME: ""
+  # SMTP_TIMEOUT_SECONDS: "30"
+  # EMAIL_FROM: "stt@example.kz"
+  # EMAIL_TO: "ops@example.kz,qa@example.kz"
   MAX_RETRIES: "3"
   RETRY_BACKOFF_CAP_SECONDS: "300"
   DB_PATH: "/data/jobs.db"
@@ -162,7 +183,7 @@ config:
 #   kubectl create secret generic ai-service-secrets -n production \
 #     --from-env-file=.env
 #
-# (Kubernetes only picks up S3_ACCESS_KEY/S3_SECRET_KEY/LLM_API_KEY/WHISPER_API_KEY
+# (Kubernetes only picks up S3_ACCESS_KEY/S3_SECRET_KEY/LLM_API_KEY/WHISPER_API_KEY/SMTP_PASSWORD
 #  from the file; the extra .env entries are harmless but you can trim them.)
 secrets:
   existingSecret: "ai-service-secrets"
@@ -174,6 +195,8 @@ secrets:
     WHISPER_API_KEY: ""
     # optional CSRF token sent to BPM as the x-api-key header; omitted when empty
     BPM_CSRF_TOKEN: ""
+    # SMTP AUTH password for email delivery; omitted when empty
+    SMTP_PASSWORD: ""
 
 # Extra raw env entries appended to the container (list of {name, value|valueFrom}).
 extraEnv: []

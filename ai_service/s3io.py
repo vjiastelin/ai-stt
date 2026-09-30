@@ -9,6 +9,18 @@ from ai_service.config import ServiceConfig
 from ai_service.errors import InfrastructureError, PermanentJobError
 
 
+# supported call-record formats: key extension → upload content type
+AUDIO_CONTENT_TYPES = {".mp3": "audio/mpeg", ".wav": "audio/wav"}
+
+
+def audio_suffix(key: str) -> str:
+    """Lower-cased extension of a supported key (".mp3"/".wav"), else ValueError."""
+    suffix = Path(key).suffix.lower()
+    if suffix not in AUDIO_CONTENT_TYPES:
+        raise ValueError(f"unsupported audio format {suffix or '(none)'!r}: {key!r}")
+    return suffix
+
+
 def parse_call_record_url(url: str) -> tuple[str, str]:
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme == "s3":
@@ -22,9 +34,9 @@ def parse_call_record_url(url: str) -> tuple[str, str]:
         raise ValueError(f"unsupported CallRecordUrl scheme: {url!r}")
     if not bucket or not key:
         raise ValueError(f"CallRecordUrl must contain bucket and key: {url!r}")
-    if not key.lower().endswith(".mp3"):
-        # call recordings are always mp3 (strict policy, spec §3.1)
-        raise ValueError(f"CallRecordUrl must point to an .mp3 file: {url!r}")
+    if Path(key).suffix.lower() not in AUDIO_CONTENT_TYPES:
+        # strict allow-list (spec §3.1): recordings are mp3, wav accepted too
+        raise ValueError(f"CallRecordUrl must point to an .mp3 or .wav file: {url!r}")
     return bucket, urllib.parse.unquote(key)
 
 
