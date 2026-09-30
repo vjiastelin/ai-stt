@@ -134,3 +134,17 @@ def test_transcribe_options_override_defaults(monkeypatch):
     assert captured["vad_parameters"] == {"speech_pad_ms": 100}
     # unrelated defaults still flow through
     assert captured["no_speech_threshold"] == 0.5
+
+
+def test_request_prompt_sets_initial_prompt(monkeypatch):
+    captured = _capture_transcribe_kwargs(monkeypatch)
+    from whisper_api.engine import Engine
+
+    engine = Engine("tiny", "cpu", "int8", transcribe_options={"initial_prompt": "из env"})
+    engine.transcribe("call.mp3", language="ru")
+    assert captured["initial_prompt"] == "из env"  # TRANSCRIBE_OPTIONS default kept
+
+    engine.transcribe("call.mp3", language="ru", prompt="из запроса")
+    assert captured["initial_prompt"] == "из запроса"  # per-request prompt wins
+    engine.transcribe("call.mp3", language="ru")
+    assert captured["initial_prompt"] == "из env"  # not sticky across requests

@@ -118,3 +118,14 @@ def test_verify_ssl_passed_to_httpx(service_config, wav, monkeypatch, verify):
     with pytest.raises(InfrastructureError):
         transcribe_file(service_config(whisper_verify_ssl=verify), wav)
     assert seen["verify"] is verify
+
+
+@respx.mock
+def test_prompt_sent_only_when_configured(service_config, wav):
+    route = respx.post(URL).mock(return_value=httpx.Response(200, json=VERBOSE_JSON))
+    transcribe_file(service_config(whisper_prompt="почта ivan.petrov@aeroclub.ru"), wav)
+    assert b'name="prompt"' in route.calls.last.request.content
+    assert "почта ivan.petrov@aeroclub.ru".encode() in route.calls.last.request.content
+
+    transcribe_file(service_config(), wav)
+    assert b'name="prompt"' not in route.calls.last.request.content

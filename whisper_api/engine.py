@@ -59,13 +59,17 @@ class Engine:
             **(transcribe_options or {}),
         }
 
-    def transcribe(self, audio_path: str, language: str | None) -> EngineResult:
+    def transcribe(
+        self, audio_path: str, language: str | None, prompt: str | None = None
+    ) -> EngineResult:
+        # a per-request prompt (OpenAI `prompt`) overrides initial_prompt from options
+        options = {**self._options, "initial_prompt": prompt} if prompt else self._options
         with self._lock:  # one model instance: serialize concurrent requests
             try:
                 segments_iter, info = self._model.transcribe(
                     audio_path,
                     language=language or None,
-                    **self._options,
+                    **options,
                 )
 
                 segments = []

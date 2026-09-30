@@ -21,6 +21,8 @@ def transcribe_file(cfg: ServiceConfig, audio_path: Path) -> Transcription:
     data = {"model": cfg.whisper_model, "response_format": "verbose_json"}
     if cfg.language:
         data["language"] = cfg.language
+    if cfg.whisper_prompt:
+        data["prompt"] = cfg.whisper_prompt
     headers = {}
     if cfg.whisper_api_key:
         headers["Authorization"] = f"Bearer {cfg.whisper_api_key}"
