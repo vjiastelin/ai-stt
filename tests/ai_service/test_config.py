@@ -166,3 +166,32 @@ def test_whisper_prompt():
     assert load_config(REQUIRED).whisper_prompt == ""
     cfg = load_config({**REQUIRED, "WHISPER_PROMPT": "  Компания Аэроклуб, aeroclub.ru  "})
     assert cfg.whisper_prompt == "Компания Аэроклуб, aeroclub.ru"
+
+
+def test_known_domains_rendered_into_placeholder():
+    env = {**REQUIRED,
+           "SUMMARY_PROMPT": "4) Известные домены клиентов: {KNOWN_EMAIL_DOMAINS}. 5) Дальше.",
+           "KNOWN_EMAIL_DOMAINS": " Аэроклуб | Аэроклуб ИТ = AeroClub.ru ; Ромашка=romashka-group.ru;"}
+    assert load_config(env).summary_prompt == (
+        "4) Известные домены клиентов: Аэроклуб, Аэроклуб ИТ → aeroclub.ru; "
+        "Ромашка → romashka-group.ru. 5) Дальше."
+    )
+
+
+def test_known_domains_placeholder_without_list():
+    env = {**REQUIRED, "SUMMARY_PROMPT": "Домены: {KNOWN_EMAIL_DOMAINS}."}
+    assert load_config(env).summary_prompt == "Домены: список пуст."
+
+
+def test_known_domains_appended_when_prompt_has_no_placeholder():
+    env = {**REQUIRED, "SUMMARY_PROMPT": "Промт.", "KNOWN_EMAIL_DOMAINS": "Ромашка=romashka.ru"}
+    assert load_config(env).summary_prompt == (
+        "Промт.\nИзвестные корпоративные домены клиентов: Ромашка → romashka.ru."
+    )
+    assert load_config({**REQUIRED, "SUMMARY_PROMPT": "Промт."}).summary_prompt == "Промт."
+
+
+@pytest.mark.parametrize("raw", ["Ромашка", "=romashka.ru", "Ромашка=romashka", "Ромашка=рома.рф"])
+def test_invalid_known_domains_raise(raw):
+    with pytest.raises(ConfigError, match="KNOWN_EMAIL_DOMAINS"):
+        load_config({**REQUIRED, "KNOWN_EMAIL_DOMAINS": raw})
