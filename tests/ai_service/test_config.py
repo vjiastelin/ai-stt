@@ -160,3 +160,9 @@ def test_llm_extra_body_parsed():
 def test_invalid_llm_extra_body_raises(raw, match):
     with pytest.raises(ConfigError, match=match):
         load_config({**REQUIRED, "LLM_EXTRA_BODY": raw})
+
+
+def test_whisper_prompt():
+    assert load_config(REQUIRED).whisper_prompt == ""
+    cfg = load_config({**REQUIRED, "WHISPER_PROMPT": "  Компания Аэроклуб, aeroclub.ru  "})
+    assert cfg.whisper_prompt == "Компания Аэроклуб, aeroclub.ru"

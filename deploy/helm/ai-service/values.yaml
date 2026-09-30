@@ -146,6 +146,8 @@ config:
   WHISPER_TIMEOUT_SECONDS: "600"
   # "false" accepts self-signed / IP-mismatched certs of whisper-api (not verified!)
   # WHISPER_VERIFY_SSL: "true"
+  # hint for Whisper (OpenAI `prompt` field), e.g. to keep "@" in dictated e-mails
+  # WHISPER_PROMPT: "Клиент диктует корпоративную почту, например: ivan.petrov@aeroclub.ru. Компания Аэроклуб, aeroclub.ru."
   LANGUAGE: "ru"
   SUMMARY_ENABLED: "false"
   LLM_API_URL: "http://vllm.example.kz:8000/v1"

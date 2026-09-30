@@ -11,7 +11,11 @@ from whisper_api.engine import EngineResult, InvalidAudioError
 class FakeEngine:
     model_name = "fake"
 
-    def transcribe(self, audio_path: str, language: str | None) -> EngineResult:
+    def __init__(self):
+        self.prompts = []
+
+    def transcribe(self, audio_path: str, language: str | None, prompt=None) -> EngineResult:
+        self.prompts.append(prompt)
         return EngineResult(
             language=language or "ru",
             duration=2.5,
@@ -99,7 +103,7 @@ def test_auth_enforced_when_key_set():
 
 def test_engine_failure_500(client):
     class BrokenEngine:
-        def transcribe(self, audio_path, language):
+        def transcribe(self, audio_path, language, prompt=None):
             raise RuntimeError("boom")
 
     client.app.state.engine = BrokenEngine()
@@ -108,7 +112,7 @@ def test_engine_failure_500(client):
 
 def test_invalid_audio_400(client):
     class CorruptAudioEngine:
-        def transcribe(self, audio_path, language):
+        def transcribe(self, audio_path, language, prompt=None):
             raise InvalidAudioError("bad data")
 
     client.app.state.engine = CorruptAudioEngine()
@@ -125,3 +129,9 @@ def test_openapi_documents_response_schemas(client):
     ok_schema = post["responses"]["200"]["content"]["application/json"]["schema"]
     assert ok_schema["$ref"].endswith("TranscriptionResponse")
     assert "401" in post["responses"]
+
+
+def test_prompt_form_field_passed_to_engine(client):
+    assert post_wav(client, prompt="  почта ivan.petrov@aeroclub.ru  ").status_code == 200
+    assert post_wav(client).status_code == 200
+    assert client.app.state.engine.prompts == ["почта ivan.petrov@aeroclub.ru", None]

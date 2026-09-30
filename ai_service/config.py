@@ -32,6 +32,8 @@ class ServiceConfig:
     whisper_timeout_seconds: int
     whisper_api_key: str
     whisper_verify_ssl: bool
+    # sent as the OpenAI `prompt` field: vocabulary/style hint for Whisper
+    whisper_prompt: str
     language: str
     summary_enabled: bool
     llm_api_url: str
@@ -172,6 +174,7 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         whisper_api_key=env.get("WHISPER_API_KEY", ""),
         # false accepts self-signed/mismatched certs (ephemeral GPU instances)
         whisper_verify_ssl=_flag(env, "WHISPER_VERIFY_SSL", True),
+        whisper_prompt=env.get("WHISPER_PROMPT", "").strip(),
         language=env.get("LANGUAGE", "ru"),
         summary_enabled=summary_enabled,
         llm_api_url=llm_api_url,

@@ -21,7 +21,7 @@ from whisper_api.engine import EngineResult
 class FakeEngine:
     model_name = "fake"
 
-    def transcribe(self, audio_path: str, language: str | None) -> EngineResult:
+    def transcribe(self, audio_path: str, language: str | None, prompt=None) -> EngineResult:
         return EngineResult(
             language=language or "ru",
             duration=2.0,

@@ -45,6 +45,11 @@ instances reached by IP) can be used with `WHISPER_VERIFY_SSL=false` /
 `LLM_VERIFY_SSL=false`: traffic stays encrypted but the server is not
 authenticated, and a warning is logged at startup.
 
+`WHISPER_PROMPT` is sent as the OpenAI `prompt` field (whisper-api maps it to
+faster-whisper's `initial_prompt`, overriding one set in `TRANSCRIBE_OPTIONS`):
+a short vocabulary hint such as an example e-mail address and company/domain
+names makes Whisper keep `@` and domains in dictated addresses.
+
 Summaries come from an external OpenAI-compatible LLM (`LLM_API_URL`);
 set `SUMMARY_ENABLED=false` to skip summarization (Summary is sent as `""`).
 Extra request fields go in `LLM_EXTRA_BODY` (JSON), e.g.

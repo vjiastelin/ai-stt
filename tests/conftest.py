@@ -19,6 +19,7 @@ def service_config(tmp_path):
             whisper_timeout_seconds=5,
             whisper_api_key="",
             whisper_verify_ssl=True,
+            whisper_prompt="",
             language="ru",
             summary_enabled=True,
             llm_api_url="http://llm:8000/v1",
