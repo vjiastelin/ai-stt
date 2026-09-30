@@ -62,8 +62,16 @@ def test_app_version_keeps_the_release_please_marker(app_version_line):
 def test_release_please_tracks_the_chart_from_the_repo_root():
     config = json.loads(RP_CONFIG.read_text(encoding="utf-8"))
     extra_files = config["packages"]["ai_service"].get("extra-files", [])
-    assert EXPECTED_EXTRA_FILE in extra_files, (
-        f"ai_service extra-files must contain {EXPECTED_EXTRA_FILE!r} (leading "
-        f"slash = repo root). Found {extra_files!r}; a path without the slash is "
-        f"resolved under ai_service/ and is silently ignored."
+    entries = [e for e in extra_files if isinstance(e, dict) and e.get("path") == EXPECTED_EXTRA_FILE]
+    assert entries, (
+        f"ai_service extra-files must contain {{'type': 'generic', 'path': "
+        f"{EXPECTED_EXTRA_FILE!r}}} (leading slash = repo root). Found {extra_files!r}; "
+        f"a path without the slash is resolved under ai_service/ and is silently ignored."
+    )
+    # A bare "…/Chart.yaml" string makes release-please pick its Helm updater, which
+    # rewrites the chart `version` (not appVersion) and re-dumps the YAML, dropping
+    # every comment including the marker — that is how the 0.7.0 release shipped
+    # appVersion 0.6.1. The generic updater only touches the marked line.
+    assert entries[0].get("type") == "generic", (
+        f"the Chart.yaml extra-file must use \"type\": \"generic\"; got {entries[0]!r}"
     )
