@@ -44,6 +44,7 @@ scrape_configs:
 | `ai_service_s3_scan_last_success_timestamp_seconds` | gauge | Unix-время последнего успешного сканирования; 0 — сканер выключен или ещё не отработал. |
 | `ai_service_transcribe_rtf` | histogram | Real-time factor: время транскрипции ÷ длительность аудио. Чистая метрика GPU, не зависит от длины звонков. |
 | `ai_service_audio_seconds_total` | counter | Суммарные секунды обработанного аудио. |
+| `ai_service_email_routed_total{by}` | counter | Отправленные письма с результатом по правилу выбора адресата: `file` (имя файла), `domain` (домен почты клиента), `company` (название компании), `default` (клиент не опознан или не в таблице). Письма об ошибке не считаются. Доля `default` — сколько звонков не опозналось; кого добавить в таблицу, показывает `GET /routing/unmatched`. |
 
 ## Дашборд и алерты в Grafana
 

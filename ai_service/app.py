@@ -7,9 +7,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from ai_service import metrics
+from datetime import datetime, timedelta, timezone
+
+from ai_service import mailer, metrics
 from ai_service.config import ServiceConfig
 from ai_service.db import JobStore
+from ai_service.routing import normalize_company
 from ai_service.s3io import parse_call_record_url
 
 logger = logging.getLogger(__name__)
@@ -56,6 +59,22 @@ class JobResultResponse(BaseModel):
 class JobListResponse(BaseModel):
     count: int
     jobs: list[JobStatusResponse]
+
+
+class UnmatchedClient(BaseModel):
+    company: str = Field(description="«Компания:» as recognized (first spelling seen)")
+    domain: str = Field(description="Domain of the client's address, empty if none")
+    count: int
+    last_seen: str
+    examples: list[str] = Field(description="Up to 3 CallRecordIds, newest first")
+
+
+class UnmatchedReport(BaseModel):
+    days: int
+    checked: int = Field(description="Processed jobs with a summary in the window")
+    unmatched: int = Field(description="Of those, routed to the default mailbox")
+    unrecognized: int = Field(description="Of the unmatched, with neither company nor domain")
+    clients: list[UnmatchedClient] = Field(description="Unmatched clients, most calls first")
 
 
 class HealthResponse(BaseModel):
@@ -155,6 +174,41 @@ def create_app(cfg: ServiceConfig, store: JobStore) -> FastAPI:
             status=job.status,
             Summary=job.summary or "",
             FullText=job.full_text or "",
+        )
+
+    @app.get(
+        "/routing/unmatched",
+        response_model=UnmatchedReport,
+        summary="Clients whose mail went to the default mailbox (candidates for the routing table)",
+    )
+    def routing_unmatched(
+        days: int = Query(30, ge=1, le=365),
+        limit: int = Query(100, ge=1, le=1000),
+    ):
+        # re-routes stored summaries with the CURRENT table: clients added since drop out
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        jobs = store.list_summaries_since(since)
+        groups: dict[tuple[str, str], dict] = {}
+        unmatched = unrecognized = 0
+        for job in jobs:
+            decision = mailer.route_message(cfg, job.call_record_url, job.summary)
+            if decision.by != "default":
+                continue
+            unmatched += 1
+            if not decision.company and not decision.domain:
+                unrecognized += 1
+                continue
+            key = (normalize_company(decision.company), decision.domain)
+            entry = groups.setdefault(key, {"company": decision.company, "domain": decision.domain,
+                                            "count": 0, "last_seen": "", "examples": []})
+            entry["count"] += 1
+            entry["last_seen"] = max(entry["last_seen"], job.created_at)
+            entry["examples"].insert(0, job.call_record_id)
+            del entry["examples"][3:]
+        clients = sorted(groups.values(), key=lambda e: (-e["count"], e["company"], e["domain"]))
+        return UnmatchedReport(
+            days=days, checked=len(jobs), unmatched=unmatched, unrecognized=unrecognized,
+            clients=[UnmatchedClient(**e) for e in clients[:limit]],
         )
 
     @app.get("/healthz", response_model=HealthResponse, summary="Liveness probe")

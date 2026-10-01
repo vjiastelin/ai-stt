@@ -205,10 +205,13 @@ def client_company(summary: str) -> str:
     return "" if normalize_company(value) in ("", _NOT_GIVEN) else value
 
 
-def route_for_client(routing: Routing, summary: str) -> ClientRoute | None:
-    """Most specific domain match first, then a company-name match."""
+def match_client(routing: Routing, summary: str) -> tuple[ClientRoute | None, str]:
+    """(route, "domain" | "company") for the client in the summary, (None, "") if none.
+
+    Most specific domain match first, then a company-name match.
+    """
     if not summary or not routing.client_routes:
-        return None
+        return None, ""
     domain = client_email_domain(summary)
     if domain:
         best, best_len = None, 0
@@ -217,7 +220,7 @@ def route_for_client(routing: Routing, summary: str) -> ClientRoute | None:
                 if (domain == d or domain.endswith("." + d)) and len(d) > best_len:
                     best, best_len = route, len(d)
         if best is not None:
-            return best
+            return best, "domain"
     company = normalize_company(client_company(summary))
     if company:
         # whole-word match; the longest alias wins («Дельта Лизинг» over «Дельта»)
@@ -227,5 +230,10 @@ def route_for_client(routing: Routing, summary: str) -> ClientRoute | None:
             for c in route.companies:
                 if f" {c} " in padded and len(c) > best_len:
                     best, best_len = route, len(c)
-        return best
-    return None
+        if best is not None:
+            return best, "company"
+    return None, ""
+
+
+def route_for_client(routing: Routing, summary: str) -> ClientRoute | None:
+    return match_client(routing, summary)[0]

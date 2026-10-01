@@ -1,5 +1,6 @@
 """Deliver results by email over SMTP (alternative/extra channel to the BPM callback)."""
 import fnmatch
+from dataclasses import dataclass
 import logging
 import re
 import smtplib
@@ -10,7 +11,8 @@ from pathlib import PurePosixPath
 
 from ai_service.config import ServiceConfig
 from ai_service.errors import InfrastructureError
-from ai_service.routing import route_for_client
+from ai_service import metrics
+from ai_service.routing import client_company, client_email_domain, match_client
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +29,15 @@ def phone_from_url(call_record_url: str) -> str:
     return match.group(1) if match else ""
 
 
-def recipients_for(
-    cfg: ServiceConfig, call_record_url: str, summary: str = ""
-) -> tuple[str, ...]:
+@dataclass(frozen=True)
+class RoutingDecision:
+    to: tuple[str, ...]
+    by: str        # file | domain | company | default
+    company: str   # «Компания:» as recognized ("" if none)
+    domain: str    # domain of the client's address ("" if none)
+
+
+def route_message(cfg: ServiceConfig, call_record_url: str, summary: str = "") -> RoutingDecision:
     """Recipients for a record, first rule that applies:
 
     1. file-name routes (EMAIL_ROUTES, then the routing file's [[file_route]]);
@@ -37,15 +45,22 @@ def recipients_for(
        company name, as recognized in the summary;
     3. the routing file's `default`, else EMAIL_TO.
     """
+    company, domain = client_company(summary), client_email_domain(summary)
     if call_record_url:
         name = PurePosixPath(urllib.parse.unquote(urllib.parse.urlparse(call_record_url).path)).name
         for pattern, recipients in cfg.email_routes:
             if fnmatch.fnmatchcase(name, pattern):
-                return recipients
-    route = route_for_client(cfg.email_routing, summary)
+                return RoutingDecision(recipients, "file", company, domain)
+    route, by = match_client(cfg.email_routing, summary)
     if route is not None:
-        return route.to
-    return cfg.email_routing.default or cfg.email_to
+        return RoutingDecision(route.to, by, company, domain)
+    return RoutingDecision(cfg.email_routing.default or cfg.email_to, "default", company, domain)
+
+
+def recipients_for(
+    cfg: ServiceConfig, call_record_url: str, summary: str = ""
+) -> tuple[str, ...]:
+    return route_message(cfg, call_record_url, summary).to
 
 
 def _source_lines(call_record_url: str) -> str:
@@ -126,3 +141,12 @@ def deliver(
         # like the BPM callback: recipients come from config, not the job, so any
         # failure (server down, auth, refused recipient) keeps the job delivering
         raise InfrastructureError(f"email delivery failed: {exc}") from exc
+    if not error:
+        # result mails only: failure mails carry no summary and would always count as default
+        decision = route_message(cfg, call_record_url, summary)
+        metrics.EMAIL_ROUTED.labels(by=decision.by).inc()
+        if decision.by == "default":
+            logger.info(
+                "email routed to default: id=%s company=%r domain=%r",
+                call_record_id, decision.company, decision.domain,
+            )
