@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.0](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.7.0...ai-service-v0.8.0) (2026-09-30)
+
+
+### Features
+
+* KNOWN_EMAIL_DOMAINS list rendered into the summary prompt ([b891069](https://github.com/vjiastelin/ai-stt/commit/b891069fc66963f9860a94880b3f405f3052d01d))
+* KNOWN_EMAIL_DOMAINS list rendered into the summary prompt ([cfa1bfa](https://github.com/vjiastelin/ai-stt/commit/cfa1bfa924c9fe6284ae7bf4dea65a6f159361ae))
+
 ## [0.7.0](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.6.1...ai-service-v0.7.0) (2026-09-30)
 
 
