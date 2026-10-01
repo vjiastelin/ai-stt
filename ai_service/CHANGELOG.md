@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.8.0...ai-service-v0.9.0) (2026-10-01)
+
+
+### Features
+
+* EMAIL_ROUTES — route emails by the recording's file name ([b95b81f](https://github.com/vjiastelin/ai-stt/commit/b95b81f4881914b75083ec98119b4f0719c4f912))
+
 ## [0.8.0](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.7.0...ai-service-v0.8.0) (2026-09-30)
 
 

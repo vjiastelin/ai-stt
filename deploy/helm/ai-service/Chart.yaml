@@ -8,7 +8,7 @@ version: 0.7.0
 # Tracks the ai-service image release; drives the default image tag.
 # Kept in lockstep with ai_service/version.txt by release-please (generic
 # extra-file: only the marked line is touched, see release-please-config.json).
-appVersion: "0.8.0" # x-release-please-version
+appVersion: "0.9.0" # x-release-please-version
 home: https://github.com/vjiastelin/ai-stt
 sources:
   - https://github.com/vjiastelin/ai-stt
