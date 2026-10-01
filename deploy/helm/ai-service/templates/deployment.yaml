@@ -19,6 +19,9 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if .Values.emailRouting }}
+        checksum/email-routing: {{ include (print $.Template.BasePath "/email-routing.yaml") . | sha256sum }}
+        {{- end }}
         {{- if not .Values.secrets.existingSecret }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- end }}
@@ -54,9 +57,15 @@ spec:
                 name: {{ include "ai-service.fullname" . }}
             - secretRef:
                 name: {{ include "ai-service.secretName" . }}
-          {{- with .Values.extraEnv }}
+          {{- if or .Values.emailRouting .Values.extraEnv }}
           env:
+            {{- if .Values.emailRouting }}
+            - name: EMAIL_ROUTING_FILE
+              value: /config/email-routing/email-routing.toml
+            {{- end }}
+            {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- end }}
           livenessProbe:
             httpGet:
@@ -81,7 +90,17 @@ spec:
           volumeMounts:
             - name: data
               mountPath: {{ .Values.persistence.mountPath }}
+            {{- if .Values.emailRouting }}
+            - name: email-routing
+              mountPath: /config/email-routing
+              readOnly: true
+            {{- end }}
       volumes:
+        {{- if .Values.emailRouting }}
+        - name: email-routing
+          configMap:
+            name: {{ include "ai-service.fullname" . }}-email-routing
+        {{- end }}
         - name: data
           {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:

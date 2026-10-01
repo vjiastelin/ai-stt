@@ -127,6 +127,21 @@ Non-secret configuration lives under `config` and is rendered into a ConfigMap. 
 and the Secret are checksummed into the pod template, so changing either triggers a rollout on
 `helm upgrade`.
 
+## Email routing table
+
+The recipient table (`config/email-routing.toml` in the repo root) is passed as a file:
+
+```bash
+helm upgrade --install ai-stt deploy/helm/ai-service -n production \
+  -f my-values.yaml --set-file emailRouting=config/email-routing.toml
+```
+
+It is rendered into the `<release>-email-routing` ConfigMap, mounted read-only at
+`/config/email-routing`, and `EMAIL_ROUTING_FILE` is set to it. A checksum annotation rolls the
+pod whenever the table changes. With `emailRouting` empty (the default) nothing is rendered and
+mail goes by `EMAIL_ROUTES` / `EMAIL_TO`. Remember the `--set-file` on every `helm upgrade`;
+without it the ConfigMap disappears and routing falls back to `EMAIL_TO`.
+
 ## Key values
 
 | Key | Default | Notes |
@@ -150,6 +165,7 @@ and the Secret are checksummed into the pod template, so changing either trigger
 | `config.WHISPER_API_URL` | `http://whisper-api:8000/v1` | in-cluster whisper-api Service |
 | `config.BPM_CALLBACK_URL` | example | BPM endpoint; set it and/or the `SMTP_*`/`EMAIL_*` email channel (at least one) |
 | `secrets.existingSecret` | `""` | reference a pre-created Secret |
+| `emailRouting` | `""` | TOML recipient table; pass with `--set-file emailRouting=config/email-routing.toml` |
 
 See [`values.yaml`](./values.yaml) for the full list and inline comments.
 

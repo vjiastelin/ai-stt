@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from ai_service.prompts import CALL_SUMMARY_PROMPT, PROFILES
+from ai_service.routing import Routing, RoutingError, load_routing_file
 
 DEFAULT_SUMMARY_PROMPT = CALL_SUMMARY_PROMPT
 
@@ -61,6 +62,10 @@ class ServiceConfig:
     smtp_timeout_seconds: int
     email_from: str
     email_to: tuple[str, ...]
+    # (file-name glob, recipients) checked in order; first match overrides email_to
+    email_routes: tuple[tuple[str, tuple[str, ...]], ...]
+    # domain/company routes + optional fallback from EMAIL_ROUTING_FILE
+    email_routing: Routing
     max_retries: int
     retry_backoff_cap_seconds: int
     db_path: str
@@ -135,8 +140,31 @@ def _parse_llm_extra_body(env: Mapping[str, str]) -> dict:
     return body
 
 
-def parse_known_domains(raw: str) -> list[tuple[list[str], str]]:
-    """KNOWN_EMAIL_DOMAINS: "Company|Alias=domain.ru; Other=other.com" → [(names, domain)]."""
+def _parse_addresses(raw: str) -> tuple[str, ...]:
+    return tuple(a.strip() for a in raw.split(",") if a.strip())
+
+
+def parse_email_routes(raw: str) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """EMAIL_ROUTES: "AWAD_IVRrecord_*=a@x.ru; GATE_*=b@y.ru,c@y.ru" → ((glob, addrs), …)."""
+    routes = []
+    for chunk in raw.split(";"):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        pattern, sep, addresses = chunk.partition("=")
+        pattern, recipients = pattern.strip(), _parse_addresses(addresses)
+        if not sep or not pattern or not recipients or any(
+            "@" not in a or " " in a for a in recipients
+        ):
+            raise ConfigError(
+                f"EMAIL_ROUTES entry must look like 'PREFIX_*=user@example.ru': {chunk!r}"
+            )
+        routes.append((pattern, recipients))
+    return tuple(routes)
+
+
+def parse_known_domains(raw: str) -> list[tuple[list[str], tuple[str, ...]]]:
+    """KNOWN_EMAIL_DOMAINS: "Company|Alias=domain.ru; Other=other.com" → [(names, (domain,))]."""
     entries = []
     for chunk in raw.split(";"):
         chunk = chunk.strip()
@@ -149,17 +177,21 @@ def parse_known_domains(raw: str) -> list[tuple[list[str], str]]:
             raise ConfigError(
                 f"KNOWN_EMAIL_DOMAINS entry must look like 'Компания|Синоним=domain.ru': {chunk!r}"
             )
-        entries.append((names, domain))
+        entries.append((names, (domain,)))
     return entries
 
 
-def render_summary_prompt(prompt: str, known_domains: list[tuple[list[str], str]]) -> str:
+def render_summary_prompt(
+    prompt: str, known_domains: list[tuple[list[str], tuple[str, ...]]]
+) -> str:
     """Put the known-domain list into the prompt at {KNOWN_EMAIL_DOMAINS}.
 
     Without the placeholder a non-empty list is appended as a last sentence, so
     the variable still has an effect with a prompt that predates it.
     """
-    rendered = "; ".join(f"{', '.join(names)} → {domain}" for names, domain in known_domains)
+    rendered = "; ".join(
+        f"{', '.join(names)} → {', '.join(domains)}" for names, domains in known_domains
+    )
     if KNOWN_DOMAINS_PLACEHOLDER in prompt:
         return prompt.replace(KNOWN_DOMAINS_PLACEHOLDER, rendered or "список пуст")
     if rendered:
@@ -209,9 +241,19 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
     if email_enabled:
         smtp_host = _require(env, "SMTP_HOST")
         email_from = _require(env, "EMAIL_FROM")
-        email_to = tuple(a.strip() for a in _require(env, "EMAIL_TO").split(",") if a.strip())
+        email_to = _parse_addresses(_require(env, "EMAIL_TO"))
+        email_routes = parse_email_routes(env.get("EMAIL_ROUTES", ""))
+        email_routing = Routing()
+        routing_file = env.get("EMAIL_ROUTING_FILE", "").strip()
+        if routing_file:
+            try:
+                email_routing = load_routing_file(routing_file)
+            except RoutingError as exc:
+                raise ConfigError(str(exc)) from exc
+            email_routes += email_routing.file_routes  # EMAIL_ROUTES first, then the file's
     else:
-        smtp_host, email_from, email_to = "", env.get("EMAIL_FROM", ""), ()
+        smtp_host, email_from, email_to, email_routes = "", env.get("EMAIL_FROM", ""), (), ()
+        email_routing = Routing()
     smtp_port = env.get("SMTP_PORT", "").strip()
     prompt_profile, summary_prompt, whisper_prompt = _resolve_prompts(env)
     s3_scan_bucket, s3_scan_prefix = _parse_scan_url(env.get("S3_SCAN_URL", "").strip())
@@ -242,7 +284,8 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         prompt_profile=prompt_profile,
         summary_prompt=render_summary_prompt(
             summary_prompt,
-            parse_known_domains(env.get("KNOWN_EMAIL_DOMAINS", "")),
+            # the routing file's clients first, then the KNOWN_EMAIL_DOMAINS extras
+            email_routing.known_domains() + parse_known_domains(env.get("KNOWN_EMAIL_DOMAINS", "")),
         ),
         bpm_callback_url=bpm_callback_url,
         bpm_csrf_token=env.get("BPM_CSRF_TOKEN", ""),
@@ -255,6 +298,8 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         smtp_timeout_seconds=int(env.get("SMTP_TIMEOUT_SECONDS", "30")),
         email_from=email_from,
         email_to=email_to,
+        email_routes=email_routes,
+        email_routing=email_routing,
         max_retries=int(env.get("MAX_RETRIES", "3")),
         retry_backoff_cap_seconds=int(env.get("RETRY_BACKOFF_CAP_SECONDS", "300")),
         db_path=env.get("DB_PATH", "/data/jobs.db"),
