@@ -102,6 +102,30 @@ than once (e.g. after a retry that BPM actually received but did not acknowledge
 with `200`). The same holds for email: a message may be sent twice if the SMTP
 server accepted it but the connection dropped before the reply.
 
+## Email routing table
+
+Recipients are chosen per record from [`config/email-routing.toml`](config/email-routing.toml)
+(format and order of checks are documented at the top of the file). Enable it:
+
+- **docker compose** — `./config` is mounted at `/app/config`; add to `.env`:
+
+      EMAIL_ROUTING_FILE=/app/config/email-routing.toml
+
+  After editing the table, `docker compose up -d --force-recreate ai-service` is
+  enough — no image rebuild.
+- **Kubernetes** — pass the file to the chart; it becomes a ConfigMap mounted into
+  the pod, `EMAIL_ROUTING_FILE` is set for you, and changing the table rolls the pod:
+
+      helm upgrade … --set-file emailRouting=config/email-routing.toml
+
+- The AWAD/GATE file-name rules are in the table (`[[file_route]]`), so
+  `EMAIL_ROUTES` can be dropped from the environment (if both are set,
+  `EMAIL_ROUTES` is checked first). `EMAIL_TO` is still required and is used only
+  when the table has no `default`.
+- A broken table (bad TOML, unknown key, invalid domain/address, a domain or
+  company in two routes) stops startup with the offending entry in the log; the
+  committed table is also checked by `tests/ai_service/test_routing.py`.
+
 ## Monitoring
 
 ai-service exposes Prometheus metrics at `GET /metrics` (port 8080): queue depth
