@@ -123,6 +123,18 @@ def repo_routing():
     ("Дельта Лизинг", "не указано", "time006@aeroclub.team"),
     ("Дельта", "не указано", "time007@aeroclub.team"),
     ("не указано", "ivan@mvideo.ru", "time007@aeroclub.team"),
+    ("Пятёрочка", "не указано", "time005@aeroclub.team"),
+    ("Вкусно и точка", "не указано", "time005@aeroclub.team"),
+    ("Логика молока", "не указано", "time002@aeroclub.team"),
+    ("не указано", "ivan@itms.ru", "time002@aeroclub.team"),
+    ("Иркутскэнерго", "не указано", "time003@aeroclub.team"),
+    ("не указано", "petr@ncauto.ru", "time003@aeroclub.team"),
+    ("не указано", "a@iso-serv.ru", "time003@aeroclub.team"),
+    ("Эль Терра", "не указано", "time003@aeroclub.team"),
+    ("ПротоноКо", "не указано", "time003@aeroclub.team"),
+    ("Системс", "не указано", "time006@aeroclub.team"),
+    ("не указано", "a@ru.froneri.com", "time006@aeroclub.team"),
+    ("Мвидео", "не указано", "time007@aeroclub.team"),
     ("Аэроклуб ИТ", "kristina.lukyanova@aeroclub.ru", "time017@aeroclub.team"),
     ("не указано", "kitsutsushir@gmail.com (проверить)", "time017@aeroclub.team"),
     ("не указано", "не указано", "time017@aeroclub.team"),
@@ -203,5 +215,6 @@ def test_committed_table_feeds_the_prompt(repo_routing):
     names = {names[0]: domains for names, domains in repo_routing.known_domains()}
     assert names["Байер"] == ("bayer.ru", "bayer.com")
     assert names["X5"] == ("x5.ru",)
+    assert names["ГАЗ"][0] == "ncauto.ru"   # GAZ mail moved from gaz.ru
     assert "Сименс" not in names            # no domain → routing by name only
     assert all(domains for domains in names.values())

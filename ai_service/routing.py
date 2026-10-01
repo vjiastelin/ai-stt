@@ -127,6 +127,8 @@ def parse_routing(data: dict, source: str = "EMAIL_ROUTING_FILE") -> Routing:
             key = normalize_company(raw)
             if not key:
                 raise RoutingError(f"{source}: {where}: company {raw!r} is empty after normalization")
+            if seen_companies.get(key) == where:
+                continue  # another spelling of the same name in the same entry («Кока-Кола»/«Кока Кола»)
             if key in seen_companies:
                 raise RoutingError(f"{source}: {where}: company {raw!r} is already listed in {seen_companies[key]}")
             seen_companies[key] = where
