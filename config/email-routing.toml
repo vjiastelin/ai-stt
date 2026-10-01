@@ -1,0 +1,351 @@
+# Email routing for ai-service (EMAIL_ROUTING_FILE). Order of checks:
+#   1. [[file_route]]   — the recording's file name (glob, case-sensitive)
+#   2. [[route]]        — the client recognized in the summary: e-mail domain
+#                         (subdomains match, most specific wins), then company name
+#                         (case/quotes/ООО/«Х5»≈«X5»-insensitive, whole words,
+#                         longest name wins)
+#   3. default          — nobody recognized, or not listed here
+#
+# [[route.client]] = one client company: name + aliases + its domains. Aliases cover
+# how callers actually say the name (Russian/Latin spelling, brands, former names,
+# subsidiaries). Clients with domains also become the summary prompt's list of known
+# corporate domains ({KNOWN_EMAIL_DOMAINS}); the first domain is the main one.
+# A domain or company listed for two clients is rejected at startup.
+#
+# Owners of the domains were checked on the web (sites, whois, MX/NS records) in
+# Oct 2026; «medium» notes mark matches based on shared mail servers only.
+
+default = "time017@aeroclub.team"
+
+[[file_route]]
+pattern = "AWAD_IVRrecord_*"
+to = "anywayanyday-info-gate@yandex.ru"
+
+[[file_route]]
+pattern = "GATE_IVRrecord_*"
+to = "info@go.gate.ru"
+
+# ── Альянс ───────────────────────────────────────────────────────────────────────
+[[route]]
+name = "Альянс"
+to = "time001@aeroclub.team"
+
+[[route.client]]
+name = "Асцензия"
+aliases = ["Асценсия", "Ascensia", "Асцензия Диабетис Кэа", "Ascensia Diabetes Care"]
+domains = ["ascensia.com"]
+
+[[route.client]]
+name = "Байер"
+aliases = ["Баер", "Bayer"]
+domains = ["bayer.ru", "bayer.com"]
+
+[[route.client]]
+name = "Везерфорд"
+aliases = ["Уэзерфорд", "Везерфорт", "Weatherford"]
+domains = ["weatherford.ru"]
+
+[[route.client]]
+name = "Сервье"
+aliases = ["Сервьер", "Лаборатории Сервье", "Servier"]
+domains = ["servier.com"]
+
+[[route.client]]
+name = "Яков и Партнеры"
+aliases = ["Яков энд Партнерс", "Yakov and Partners", "Yakov Partners"]
+domains = ["yakov.partners"]
+
+[[route.client]]
+name = "Полюс Золото"
+aliases = ["Полюс", "Polyus", "Polyus Gold"]   # «Полюс Золото / Регионы ВВО» тоже совпадёт
+domains = ["polyus.com"]
+
+# ── ТрипХАБ ──────────────────────────────────────────────────────────────────────
+[[route]]
+name = "ТрипХАБ"
+to = "time002@aeroclub.team"
+
+[[route.client]]
+name = "Эйч энд Эн Холдинг"
+aliases = ["Эйч энд Эн", "Эйч эн Эн", "H&N", "H&N Holding", "Логика молока", "Данон", "Danone"]
+domains = ["logmol.ru"]
+
+[[route.client]]
+name = "Торговый дом МУМТ"
+aliases = ["ТД МУМТ", "МУМТ", "ИТМС", "Ай Ти Эм Эс", "ITMS",
+           "Международные услуги по маркетингу табака"]
+domains = ["itms.ru"]
+
+[[route.client]]
+name = "Марс Холдинг"
+aliases = ["Марс", "Mars", "Эффем", "Effem"]
+domains = ["effem.com"]
+
+[[route.client]]
+name = "Билайн"
+aliases = ["Вымпелком", "Вымпел-Коммуникации", "Beeline", "VimpelCom"]
+domains = ["beeline.ru"]
+
+# ── Русал, Базел, Эн+, ГАЗ ───────────────────────────────────────────────────────
+[[route]]
+name = "Русал, Базел, Эн+, ГАЗ"
+to = "time003@aeroclub.team"
+
+[[route.client]]
+name = "Эн+"
+aliases = ["Эн плюс", "Эн Плюс Груп", "En+", "En+ Group", "Энплюс",
+           "Иркутскэнерго", "Байкальская энергетическая компания", "БЭК",
+           "Иркутская электросетевая компания", "ИЭСК", "Хорека Инжиниринг",
+           "Сервис Инжиниринг Системс", "Байкал Аква", "Легенда Байкала"]
+domains = [
+  "enplus.ru", "enplus-service.ru", "enplus-telecom.ru", "enplus-generation.ru",
+  "enplus-hydro.ru", "enplus-teplo-volga.ru", "enplus-ugol.ru", "enplus-univer.ru",
+  "irkutskenergo.ru", "es.irkutskenergo.ru", "baikalenergy.com", "iesk.ru",
+  "horeca-ing.ru", "tkbaikalaqua.com",
+  "go-legend.ru", "se-system.ru",   # medium: only shared En+ mail servers
+]
+
+[[route.client]]
+name = "Русал"
+aliases = ["Rusal", "Ру Ал"]
+domains = ["rusal.com"]
+
+[[route.client]]
+name = "ИСО"
+aliases = ["Инжиниринг Строительство Обслуживание", "ISO"]
+domains = ["iso-serv.com", "iso-serv.ru"]
+
+[[route.client]]
+name = "Базел"
+aliases = ["Базэл", "Базовый элемент", "Basic Element", "Прогресс Агро", "Главстрой"]
+domains = ["progressagro.com", "glavstroy.ru"]
+
+[[route.client]]
+name = "ГАЗ"
+aliases = ["Группа ГАЗ", "Горьковский автозавод", "GAZ", "Автодизель", "ЯМЗ",
+           "Ярославский моторный завод", "Русские автобусы", "Нижегородские автокомпоненты",
+           "СТТ", "Современные транспортные технологии"]
+domains = ["ncauto.ru", "gaz.ru", "ymzmotor.ru", "rubuses.ru", "nautocom.ru", "stt.ru"]
+
+[[route.client]]
+name = "Л-Терра"
+aliases = ["Эль Терра", "Эль-Терра", "L-Terra"]
+domains = ["l-terra.ru"]
+
+[[route.client]]
+name = "ОМГ"
+aliases = ["Объединённая машиностроительная группа", "UMG", "Ю Эм Джи"]
+domains = ["umg.ru"]
+
+[[route.client]]
+name = "Лакталис"
+aliases = ["Лакталис Восток", "Lactalis"]
+domains = ["ru.lactalis.com"]
+
+[[route.client]]
+name = "ИКГС"
+aliases = ["И Ка Гэ Эс", "IKGS"]
+domains = ["ikgs.ru"]
+
+[[route.client]]
+name = "ПротоноКо"
+aliases = ["Протон Ко", "Протон", "Proton Co", "Proton"]
+domains = ["proton-co.com"]
+
+[[route.client]]
+name = "ПакОрг"
+aliases = ["Пак Орг", "PAC Org", "Pac-Org"]
+domains = ["pac-org.ru"]
+
+[[route.client]]
+name = "НПК"
+aliases = ["Научно-промышленные консультанты", "Эн Пэ Ка", "NPK"]
+domains = ["npk.team"]
+
+# ── Триплайн ─────────────────────────────────────────────────────────────────────
+[[route]]
+name = "Триплайн"
+to = "time005@aeroclub.team"
+
+[[route.client]]
+name = "Лемана Про"
+aliases = ["Лемана", "Леруа Мерлен", "Леруа", "Lemana Pro", "Leroy Merlin"]
+domains = ["lemanapro.ru"]
+
+[[route.client]]
+name = "Система ПБО"
+aliases = ["ПБО", "Вкусно и точка", "Вкусно — и точка"]
+domains = ["qsrsystem.ru"]
+
+[[route.client]]
+name = "Такеда"
+aliases = ["Takeda", "Такеда Фармасьютикалс"]
+domains = ["takeda.com"]
+
+[[route.client]]
+name = "X5"
+aliases = ["Икс пять", "Икс 5", "X5 Group", "X5 Retail Group", "Икс пять Ритейл Групп",
+           "Пятёрочка", "Перекрёсток", "Чижик"]   # «Х5» по-русски совпадает с латинским X5
+domains = ["x5.ru"]
+
+# ── Трип ─────────────────────────────────────────────────────────────────────────
+[[route]]
+name = "Трип"
+to = "time006@aeroclub.team"
+
+[[route.client]]
+name = "Берингер Ингельхайм"
+aliases = ["Берингер Ингельхам", "Бёрингер", "Берингер", "Boehringer Ingelheim", "Boehringer"]
+domains = ["boehringer-ingelheim.com"]
+
+[[route.client]]
+name = "Виатрис"
+aliases = ["Viatris"]
+domains = ["viatris.com"]
+
+[[route.client]]
+name = "Дельта Лизинг"
+aliases = ["Дельтализинг", "Delta Leasing"]
+domains = ["deltaleasing.ru"]
+
+[[route.client]]
+name = "Детский мир"
+aliases = ["Детмир", "Detmir"]
+domains = ["detmir.ru"]
+
+[[route.client]]
+name = "Кока-Кола"
+aliases = ["Кока Кола", "Coca-Cola", "Мултон", "Мултон Партнерс", "Multon", "Multon Partners"]
+domains = ["multonpartners.com"]
+
+[[route.client]]
+name = "Медтроник"
+aliases = ["Medtronic"]
+domains = ["medtronic.com"]
+
+[[route.client]]
+name = "Монделез"
+aliases = ["Мондэлис", "Mondelez"]
+domains = ["mdlz.com"]
+
+[[route.client]]
+name = "Нестле"
+aliases = ["Nestle", "Nestlé"]
+domains = ["nestle.ru"]
+
+[[route.client]]
+name = "ППР B2B"
+aliases = ["ППР", "Пэ Пэ Эр", "Передовые Платежные Решения", "Петрол Плюс", "PetrolPlus"]
+domains = ["pprcard.ru"]
+
+[[route.client]]
+name = "Пфайзер"
+aliases = ["Файзер", "Pfizer"]
+domains = ["pfizer.com"]
+
+[[route.client]]
+name = "Ред Булл"
+aliases = ["Рэдбулл", "Редбул", "Red Bull"]
+domains = ["redbull.com"]
+
+[[route.client]]
+name = "Санофи"
+aliases = ["Sanofi"]
+domains = ["sanofi.com"]
+
+[[route.client]]
+name = "Сен Гобен"
+aliases = ["Сен-Гобен", "Saint-Gobain", "Сен-Гобен Строительная Продукция"]
+domains = ["sgcp.ru"]
+
+[[route.client]]
+name = "Сименс"
+aliases = ["Siemens", "Системс"]   # ООО «Сименс» переименовано в «Системс» (2024)
+
+[[route.client]]
+name = "Тева"
+aliases = ["Teva"]
+domains = ["teva.ru"]
+
+[[route.client]]
+name = "Фронери"
+aliases = ["Фронери Рус", "Froneri"]
+domains = ["ru.froneri.com"]
+
+[[route.client]]
+name = "Телематика"
+aliases = ["Телематика Концерн", "Концерн Телематика"]
+domains = ["telematika.com"]
+
+# ── Дельта/Лента ─────────────────────────────────────────────────────────────────
+[[route]]
+name = "Дельта/Лента"
+to = "time007@aeroclub.team"
+
+[[route.client]]
+name = "Дельта"
+
+[[route.client]]
+name = "Лента"
+aliases = ["Lenta"]
+domains = ["lenta.com"]
+
+[[route.client]]
+name = "М.Видео"
+aliases = ["Мвидео", "Эм Видео", "M.Video", "MVideo", "Эльдорадо", "М.Видео-Эльдорадо"]
+domains = ["mvideo.ru"]
+
+[[route.client]]
+name = "Ново Нордиск"
+aliases = ["Novo Nordisk", "Ново-Нордиск"]
+domains = ["novonordisk.com"]
+
+[[route.client]]
+name = "Фармстандарт"
+aliases = ["Фарм Стандарт", "Pharmstandard"]
+domains = ["pharmstd.ru"]
+
+[[route.client]]
+name = "Бостон Сайентифик"
+aliases = ["Бостон Сайнтифик", "Boston Scientific"]
+domains = ["bsci.com"]
+
+[[route.client]]
+name = "BI.ZONE"
+aliases = ["Бизон", "Би Зон", "БИ.ЗОН", "BiZone"]
+domains = ["bi.zone"]
+
+[[route.client]]
+name = "КВС Рус"
+aliases = ["КВС", "KWS", "KWS Rus"]
+domains = ["kws.com"]
+
+[[route.client]]
+name = "Рубитех"
+aliases = ["Руби Тех", "Rubytech"]
+domains = ["rubytech.ru"]
+
+[[route.client]]
+name = "Вентра"
+aliases = ["Ventra"]
+domains = ["ventra.ru"]
+
+[[route.client]]
+name = "Эйч Энерджи"
+aliases = ["Аш Энерджи", "H Energy", "H-Energy"]
+domains = ["energy-h.ru"]
+
+[[route.client]]
+name = "КНГК-Групп"
+aliases = ["КНГК", "KNGK Group", "KNGK"]
+domains = ["kngk-group.ru"]
+
+[[route.client]]
+name = "ФН Груп"
+aliases = ["ФН Групп", "ФН Машины", "Ферронордик", "FN Group", "FNGroup"]
+domains = ["fngroup.ru"]
+
+[[route.client]]
+name = "КУБ"
+aliases = ["ФН Системы", "Куб 3Д", "Cube 3D"]
+domains = ["cube-3d.ru"]

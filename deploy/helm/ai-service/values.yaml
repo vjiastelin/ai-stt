@@ -202,6 +202,13 @@ secrets:
     # SMTP AUTH password for email delivery; omitted when empty
     SMTP_PASSWORD: ""
 
+# Email routing table (TOML, see config/email-routing.toml for the format and the
+# current table). When set, it is rendered into a ConfigMap, mounted read-only and
+# EMAIL_ROUTING_FILE is pointed at it; a change rolls the pod (checksum annotation).
+# Keep it in a separate values file, e.g.:
+#   helm upgrade … --set-file emailRouting=config/email-routing.toml
+emailRouting: ""
+
 # Extra raw env entries appended to the container (list of {name, value|valueFrom}).
 extraEnv: []
 

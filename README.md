@@ -25,6 +25,13 @@ Two services:
   `EMAIL_ROUTES` (`"AWAD_IVRrecord_*=a@x.ru; GATE_IVRrecord_*=b@y.ru"`) routes mail
   by the recording's file name: the first matching glob (case-sensitive, folder
   ignored) replaces `EMAIL_TO`, which stays the default for everything else.
+  The full routing table lives in a TOML file (`EMAIL_ROUTING_FILE`; format and
+  the current table: [`config/email-routing.toml`](config/email-routing.toml)):
+  file-name rules first, then client routes by the e-mail domain (subdomains
+  included, most specific wins) or — as a fallback — the company name recognized
+  in the summary, then the file's `default`. A domain or company listed in two
+  routes stops startup. Helm: `--set-file emailRouting=config/email-routing.toml`
+  renders it into a ConfigMap and sets `EMAIL_ROUTING_FILE`.
   **Bucket scanner (optional):** with `S3_SCAN_URL=s3://bucket/prefix/` the
   service also polls that prefix every `S3_SCAN_INTERVAL_SECONDS` (300) and
   queues each *new* `.mp3`/`.wav` object exactly once — seen keys are stored in
@@ -94,6 +101,35 @@ same `{Summary, FullText, Error, ErrorDescription}` payload may be posted more
 than once (e.g. after a retry that BPM actually received but did not acknowledge
 with `200`). The same holds for email: a message may be sent twice if the SMTP
 server accepted it but the connection dropped before the reply.
+
+## Email routing table
+
+Recipients are chosen per record from [`config/email-routing.toml`](config/email-routing.toml)
+(format and order of checks are documented at the top of the file). Enable it:
+
+- **docker compose** — `./config` is mounted at `/app/config`; add to `.env`:
+
+      EMAIL_ROUTING_FILE=/app/config/email-routing.toml
+
+  After editing the table, `docker compose up -d --force-recreate ai-service` is
+  enough — no image rebuild.
+- **Kubernetes** — pass the file to the chart; it becomes a ConfigMap mounted into
+  the pod, `EMAIL_ROUTING_FILE` is set for you, and changing the table rolls the pod:
+
+      helm upgrade … --set-file emailRouting=config/email-routing.toml
+
+- The AWAD/GATE file-name rules are in the table (`[[file_route]]`), so
+  `EMAIL_ROUTES` can be dropped from the environment (if both are set,
+  `EMAIL_ROUTES` is checked first). `EMAIL_TO` is still required and is used only
+  when the table has no `default`.
+- Each `[[route.client]]` (company + aliases + domains) also feeds the summary
+  prompt's `{KNOWN_EMAIL_DOMAINS}` list, so the LLM can complete an address whose
+  domain was lost; `KNOWN_EMAIL_DOMAINS` now only adds pairs missing from the
+  table. Bare route-level `domains`/`companies` route mail but aren't shown to
+  the LLM — move them into a client once the owner is known.
+- A broken table (bad TOML, unknown key, invalid domain/address, a domain or
+  company listed twice) stops startup with the offending entry in the log; the
+  committed table is also checked by `tests/ai_service/test_routing.py`.
 
 ## Monitoring
 

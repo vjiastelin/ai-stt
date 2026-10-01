@@ -1,0 +1,11 @@
+{{- if .Values.emailRouting }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ai-service.fullname" . }}-email-routing
+  labels:
+    {{- include "ai-service.labels" . | nindent 4 }}
+data:
+  email-routing.toml: |
+    {{- .Values.emailRouting | nindent 4 }}
+{{- end }}

@@ -25,6 +25,14 @@ def main() -> None:
     )
     for pattern, recipients in cfg.email_routes:
         logging.getLogger(__name__).info("email route: %s → %s", pattern, ",".join(recipients))
+    routing = cfg.email_routing
+    if routing.client_routes or routing.default:
+        logging.getLogger(__name__).info(
+            "email routing file: %d client route(s), %d domain(s), %d compan(y/ies), default %s",
+            len(routing.client_routes), sum(len(r.domains) for r in routing.client_routes),
+            sum(len(r.companies) for r in routing.client_routes),
+            ",".join(routing.default) or "EMAIL_TO",
+        )
     for name, verify in (("WHISPER", cfg.whisper_verify_ssl), ("LLM", cfg.llm_verify_ssl)):
         if not verify:
             logging.getLogger(__name__).warning(
