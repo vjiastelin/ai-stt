@@ -1,6 +1,7 @@
 import pytest
 
 from ai_service.config import ServiceConfig
+from ai_service.routing import Routing
 
 
 @pytest.fixture
@@ -41,6 +42,7 @@ def service_config(tmp_path):
             email_from="",
             email_to=(),
             email_routes=(),
+            email_routing=Routing(),
             max_retries=3,
             retry_backoff_cap_seconds=300,
             db_path=str(tmp_path / "jobs.db"),

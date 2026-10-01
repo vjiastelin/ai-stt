@@ -25,6 +25,13 @@ Two services:
   `EMAIL_ROUTES` (`"AWAD_IVRrecord_*=a@x.ru; GATE_IVRrecord_*=b@y.ru"`) routes mail
   by the recording's file name: the first matching glob (case-sensitive, folder
   ignored) replaces `EMAIL_TO`, which stays the default for everything else.
+  The full routing table lives in a TOML file (`EMAIL_ROUTING_FILE`; format and
+  the current table: [`config/email-routing.toml`](config/email-routing.toml)):
+  file-name rules first, then client routes by the e-mail domain (subdomains
+  included, most specific wins) or — as a fallback — the company name recognized
+  in the summary, then the file's `default`. A domain or company listed in two
+  routes stops startup. Helm: `--set-file emailRouting=config/email-routing.toml`
+  renders it into a ConfigMap and sets `EMAIL_ROUTING_FILE`.
   **Bucket scanner (optional):** with `S3_SCAN_URL=s3://bucket/prefix/` the
   service also polls that prefix every `S3_SCAN_INTERVAL_SECONDS` (300) and
   queues each *new* `.mp3`/`.wav` object exactly once — seen keys are stored in

@@ -66,6 +66,9 @@ services:
       - "${AI_SERVICE_PORT:-8080}:8080"
     volumes:
       - ai-service-data:/data
+      # routing table, read when EMAIL_ROUTING_FILE=/app/config/email-routing.toml;
+      # mounted so edits apply on `docker compose up -d --force-recreate ai-service`
+      - ./config:/app/config:ro
     depends_on:
       whisper-api:
         condition: service_healthy

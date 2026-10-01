@@ -1,0 +1,119 @@
+# Email routing for ai-service (EMAIL_ROUTING_FILE). Order of checks:
+#   1. [[file_route]]  — the recording's file name (glob, case-sensitive)
+#   2. [[route]]       — the client recognized in the summary: e-mail domain
+#                        (subdomains match, most specific wins), then company name
+#                        (case/quotes/ООО/«Х5»≈«X5»-insensitive, whole words,
+#                        longest name wins)
+#   3. default         — nobody recognized, or not listed here
+# A domain or company in two routes is rejected at startup.
+
+default = "time017@aeroclub.team"
+
+[[file_route]]
+pattern = "AWAD_IVRrecord_*"
+to = "anywayanyday-info-gate@yandex.ru"
+
+[[file_route]]
+pattern = "GATE_IVRrecord_*"
+to = "info@go.gate.ru"
+
+[[route]]
+name = "Альянс"
+to = "time001@aeroclub.team"
+companies = [
+  "Асцензия", "Ascensia",
+  "Байер", "Bayer",
+  "Везерфорд", "Weatherford",
+  "Сервье", "Servier",
+  "Яков и Партнеры", "Yakov and Partners",
+  "Полюс Золото", "Полюс", "Polyus",
+]
+domains = [
+  "ascensia.com", "bayer.ru", "bayer.com", "weatherford.ru", "servier.com",
+  "yakov.partners", "polyus.com",
+]
+
+[[route]]
+name = "ТрипХАБ"
+to = "time002@aeroclub.team"
+companies = [
+  "Эйч энд Эн Холдинг", "H&N Holding",
+  "Торговый дом МУМТ", "МУМТ",
+  "Марс Холдинг",
+  "Билайн", "Вымпелком", "Beeline",
+]
+domains = ["itms.ru", "logmol.ru", "beeline.ru"]
+
+[[route]]
+name = "Русал, Базел, Эн+, ГАЗ"
+to = "time003@aeroclub.team"
+companies = [
+  "Русал", "Rusal",
+  "Базел", "Базэл", "Базовый элемент",
+  "Эн+", "En+",
+  "ГАЗ", "Группа ГАЗ",
+]
+domains = [
+  # Эн+
+  "enplus.ru", "enplus-service.ru", "enplus-telecom.ru", "enplus-generation.ru",
+  "enplus-hydro.ru", "enplus-teplo-volga.ru", "enplus-ugol.ru", "enplus-univer.ru",
+  "baikalenergy.com", "irkutskenergo.ru", "es.irkutskenergo.ru", "go-legend.ru",
+  "horeca-ing.ru", "iesk.ru", "ikgs.ru", "npk.team", "progressagro.com",
+  "se-system.ru", "tkbaikalaqua.com",
+  # Русал
+  "rusal.com", "iso-serv.com",
+  # Базел
+  "proton-co.com",
+  # ГАЗ
+  "gaz.ru", "glavstroy.ru", "ncauto.ru", "ru.lactalis.com", "stt.ru", "ymzmotor.ru",
+  "rubuses.ru", "umg.ru", "nautocom.ru", "l-terra.ru", "pac-org.ru",
+]
+
+[[route]]
+name = "Триплайн"
+to = "time005@aeroclub.team"
+companies = [
+  "Леруа Мерлен", "Лемана Про", "Leroy Merlin", "Lemana Pro",
+  "Система ПБО",
+  "Такеда", "Takeda",
+  "X5", "X5 Group", "X5 Retail Group",   # «Х5» по-русски совпадает с латинским X5
+]
+domains = ["lemanapro.ru", "qsrsystem.ru", "takeda.com", "x5.ru"]
+
+[[route]]
+name = "Трип"
+to = "time006@aeroclub.team"
+companies = [
+  "Берингер Ингельхайм", "Берингер Ингельхам", "Boehringer Ingelheim",
+  "Виатрис", "Viatris",
+  "Дельтализинг", "Дельта Лизинг",
+  "Детский мир",
+  "Кока-Кола", "Coca-Cola", "Мултон",
+  "Медтроник", "Medtronic",
+  "Монделез", "Mondelez",
+  "Нестле", "Nestle",
+  "ППР B2B",
+  "Пфайзер", "Pfizer",
+  "Рэдбулл", "Ред Булл", "Red Bull",
+  "Санофи", "Sanofi",
+  "Сен Гобен", "Saint-Gobain",
+  "Сименс", "Siemens",
+  "Тева", "Teva",
+  "Фронери", "Froneri",
+  "Телематика",
+]
+domains = [
+  "boehringer-ingelheim.com", "viatris.com", "deltaleasing.ru", "detmir.ru",
+  "multonpartners.com", "medtronic.com", "mdlz.com", "nestle.ru", "pfizer.com",
+  "redbull.com", "sanofi.com", "sgcp.ru", "teva.ru", "telematika.com",
+]
+
+[[route]]
+name = "Дельта/Лента"
+to = "time007@aeroclub.team"
+companies = ["Дельта", "Лента"]
+domains = [
+  "bi.zone", "bsci.com", "cube-3d.ru", "energy-h.ru", "fngroup.ru", "kngk-group.ru",
+  "kws.com", "mvideo.ru", "novonordisk.com", "pharmstd.ru", "rubytech.ru", "ventra.ru",
+  "lenta.com",
+]

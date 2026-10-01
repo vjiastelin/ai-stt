@@ -10,6 +10,7 @@ from pathlib import PurePosixPath
 
 from ai_service.config import ServiceConfig
 from ai_service.errors import InfrastructureError
+from ai_service.routing import route_for_client
 
 logger = logging.getLogger(__name__)
 
@@ -26,14 +27,25 @@ def phone_from_url(call_record_url: str) -> str:
     return match.group(1) if match else ""
 
 
-def recipients_for(cfg: ServiceConfig, call_record_url: str) -> tuple[str, ...]:
-    """EMAIL_ROUTES by the record's file name (first matching glob), else EMAIL_TO."""
+def recipients_for(
+    cfg: ServiceConfig, call_record_url: str, summary: str = ""
+) -> tuple[str, ...]:
+    """Recipients for a record, first rule that applies:
+
+    1. file-name routes (EMAIL_ROUTES, then the routing file's [[file_route]]);
+    2. client routes from the routing file — the client's e-mail domain, then
+       company name, as recognized in the summary;
+    3. the routing file's `default`, else EMAIL_TO.
+    """
     if call_record_url:
         name = PurePosixPath(urllib.parse.unquote(urllib.parse.urlparse(call_record_url).path)).name
         for pattern, recipients in cfg.email_routes:
             if fnmatch.fnmatchcase(name, pattern):
                 return recipients
-    return cfg.email_to
+    route = route_for_client(cfg.email_routing, summary)
+    if route is not None:
+        return route.to
+    return cfg.email_routing.default or cfg.email_to
 
 
 def _source_lines(call_record_url: str) -> str:
@@ -57,7 +69,7 @@ def build_message(
 ) -> EmailMessage:
     msg = EmailMessage()
     msg["From"] = cfg.email_from
-    msg["To"] = ", ".join(recipients_for(cfg, call_record_url))
+    msg["To"] = ", ".join(recipients_for(cfg, call_record_url, summary))
     if error:
         msg["Subject"] = f"Ошибка транскрибации звонка {call_record_id}"
         msg.set_content(

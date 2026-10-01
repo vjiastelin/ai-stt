@@ -7,6 +7,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from ai_service.routing import Routing, RoutingError, load_routing_file
+
 DEFAULT_SUMMARY_PROMPT = (
     "Составь краткое содержание телефонного разговора на русском языке: "
     "основная тема, договорённости, следующие шаги. "
@@ -64,6 +66,8 @@ class ServiceConfig:
     email_to: tuple[str, ...]
     # (file-name glob, recipients) checked in order; first match overrides email_to
     email_routes: tuple[tuple[str, tuple[str, ...]], ...]
+    # domain/company routes + optional fallback from EMAIL_ROUTING_FILE
+    email_routing: Routing
     max_retries: int
     retry_backoff_cap_seconds: int
     db_path: str
@@ -219,8 +223,17 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         email_from = _require(env, "EMAIL_FROM")
         email_to = _parse_addresses(_require(env, "EMAIL_TO"))
         email_routes = parse_email_routes(env.get("EMAIL_ROUTES", ""))
+        email_routing = Routing()
+        routing_file = env.get("EMAIL_ROUTING_FILE", "").strip()
+        if routing_file:
+            try:
+                email_routing = load_routing_file(routing_file)
+            except RoutingError as exc:
+                raise ConfigError(str(exc)) from exc
+            email_routes += email_routing.file_routes  # EMAIL_ROUTES first, then the file's
     else:
         smtp_host, email_from, email_to, email_routes = "", env.get("EMAIL_FROM", ""), (), ()
+        email_routing = Routing()
     smtp_port = env.get("SMTP_PORT", "").strip()
     s3_scan_bucket, s3_scan_prefix = _parse_scan_url(env.get("S3_SCAN_URL", "").strip())
 
@@ -263,6 +276,7 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         email_from=email_from,
         email_to=email_to,
         email_routes=email_routes,
+        email_routing=email_routing,
         max_retries=int(env.get("MAX_RETRIES", "3")),
         retry_backoff_cap_seconds=int(env.get("RETRY_BACKOFF_CAP_SECONDS", "300")),
         db_path=env.get("DB_PATH", "/data/jobs.db"),
