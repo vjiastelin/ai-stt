@@ -195,3 +195,19 @@ def test_known_domains_appended_when_prompt_has_no_placeholder():
 def test_invalid_known_domains_raise(raw):
     with pytest.raises(ConfigError, match="KNOWN_EMAIL_DOMAINS"):
         load_config({**REQUIRED, "KNOWN_EMAIL_DOMAINS": raw})
+
+
+def test_email_routes_parsed():
+    env = {**REQUIRED, **EMAIL, "EMAIL_ROUTES":
+           " AWAD_IVRrecord_* = anywayanyday-info-gate@yandex.ru ; GATE_IVRrecord_*=info@go.gate.ru, b@go.gate.ru;"}
+    assert load_config(env).email_routes == (
+        ("AWAD_IVRrecord_*", ("anywayanyday-info-gate@yandex.ru",)),
+        ("GATE_IVRrecord_*", ("info@go.gate.ru", "b@go.gate.ru")),
+    )
+    assert load_config({**REQUIRED, **EMAIL}).email_routes == ()
+
+
+@pytest.mark.parametrize("raw", ["AWAD_*", "=a@x.ru", "AWAD_*=", "AWAD_*=not-an-email", "AWAD_*=a b@x.ru"])
+def test_invalid_email_routes_raise(raw):
+    with pytest.raises(ConfigError, match="EMAIL_ROUTES"):
+        load_config({**REQUIRED, **EMAIL, "EMAIL_ROUTES": raw})

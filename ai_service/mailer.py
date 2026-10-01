@@ -1,4 +1,6 @@
 """Deliver results by email over SMTP (alternative/extra channel to the BPM callback)."""
+import fnmatch
+import logging
 import re
 import smtplib
 import ssl
@@ -8,6 +10,8 @@ from pathlib import PurePosixPath
 
 from ai_service.config import ServiceConfig
 from ai_service.errors import InfrastructureError
+
+logger = logging.getLogger(__name__)
 
 
 # IVR recordings are named <prefix>_<uuid>_<phone>.<ext>, e.g.
@@ -20,6 +24,16 @@ def phone_from_url(call_record_url: str) -> str:
     path = urllib.parse.unquote(urllib.parse.urlparse(call_record_url).path)
     match = _PHONE_SUFFIX.search(PurePosixPath(path).stem)
     return match.group(1) if match else ""
+
+
+def recipients_for(cfg: ServiceConfig, call_record_url: str) -> tuple[str, ...]:
+    """EMAIL_ROUTES by the record's file name (first matching glob), else EMAIL_TO."""
+    if call_record_url:
+        name = PurePosixPath(urllib.parse.unquote(urllib.parse.urlparse(call_record_url).path)).name
+        for pattern, recipients in cfg.email_routes:
+            if fnmatch.fnmatchcase(name, pattern):
+                return recipients
+    return cfg.email_to
 
 
 def _source_lines(call_record_url: str) -> str:
@@ -43,7 +57,7 @@ def build_message(
 ) -> EmailMessage:
     msg = EmailMessage()
     msg["From"] = cfg.email_from
-    msg["To"] = ", ".join(cfg.email_to)
+    msg["To"] = ", ".join(recipients_for(cfg, call_record_url))
     if error:
         msg["Subject"] = f"Ошибка транскрибации звонка {call_record_id}"
         msg.set_content(
@@ -95,6 +109,7 @@ def deliver(
             if cfg.smtp_username:
                 client.login(cfg.smtp_username, cfg.smtp_password)
             client.send_message(msg)
+        logger.info("emailed %s to %s", call_record_id, msg["To"])
     except (smtplib.SMTPException, OSError) as exc:
         # like the BPM callback: recipients come from config, not the job, so any
         # failure (server down, auth, refused recipient) keeps the job delivering

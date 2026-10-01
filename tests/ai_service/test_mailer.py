@@ -157,3 +157,44 @@ def test_phone_shown_after_file_path(email_config):
     assert f"Файл: {url}\nТелефон: 9019988207\n" in err.get_content()
     plain = mailer.build_message(email_config(), "id-1", "s", "t", call_record_url="s3://c/rec.wav")
     assert "Телефон" not in plain.get_body(("plain",)).get_content()
+
+
+ROUTES = (
+    ("AWAD_IVRrecord_*", ("anywayanyday-info-gate@yandex.ru",)),
+    ("GATE_IVRrecord_*", ("info@go.gate.ru",)),
+)
+
+
+@pytest.mark.parametrize(
+    "url,to",
+    [
+        ("s3://calls/in/AWAD_IVRrecord_0000-01dd_9019988207.wav", "anywayanyday-info-gate@yandex.ru"),
+        ("s3://calls/GATE_IVRrecord_0000-01dd_9019988207.mp3", "info@go.gate.ru"),
+        ("s3://calls/IVRrecord_0000-01dd_9019988207.wav", "time017@aeroclub.team"),
+        ("s3://calls/AWAD_IVRrecord/IVRrecord_1_9019988207.wav", "time017@aeroclub.team"),  # folder, not file
+        ("s3://calls/awad_IVRrecord_1_9019988207.wav", "time017@aeroclub.team"),  # case-sensitive
+        ("https://minio/calls/x/GATE_IVRrecord_%231_9019988207.wav", "info@go.gate.ru"),
+        ("", "time017@aeroclub.team"),  # BPM request without a URL → default
+    ],
+)
+def test_recipients_routed_by_file_name(email_config, url, to):
+    cfg = email_config(email_to=("time017@aeroclub.team",), email_routes=ROUTES)
+    assert mailer.recipients_for(cfg, url) == (to,)
+    assert mailer.build_message(cfg, "id-1", "s", "t", call_record_url=url)["To"] == to
+
+
+def test_first_matching_route_wins_and_failures_are_routed_too(email_config):
+    cfg = email_config(email_to=("default@x.ru",), email_routes=(
+        ("GATE_*", ("a@x.ru", "b@x.ru")), ("GATE_IVRrecord_*", ("never@x.ru",))))
+    url = "s3://calls/GATE_IVRrecord_1_9019988207.wav"
+    assert mailer.recipients_for(cfg, url) == ("a@x.ru", "b@x.ru")
+    err = mailer.build_message(cfg, "id-1", "", "", error=True, error_description="boom",
+                               call_record_url=url)
+    assert err["To"] == "a@x.ru, b@x.ru"
+
+
+def test_routed_message_is_sent_to_route_recipients(email_config, fake_smtp):
+    cfg = email_config(email_to=("time017@aeroclub.team",), email_routes=ROUTES)
+    mailer.deliver(cfg, "id-1", "s", "t", call_record_url="s3://c/GATE_IVRrecord_1_9019988207.wav")
+    [client] = fake_smtp.instances
+    assert client.sent[0]["To"] == "info@go.gate.ru"

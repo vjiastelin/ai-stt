@@ -62,6 +62,8 @@ class ServiceConfig:
     smtp_timeout_seconds: int
     email_from: str
     email_to: tuple[str, ...]
+    # (file-name glob, recipients) checked in order; first match overrides email_to
+    email_routes: tuple[tuple[str, tuple[str, ...]], ...]
     max_retries: int
     retry_backoff_cap_seconds: int
     db_path: str
@@ -136,6 +138,29 @@ def _parse_llm_extra_body(env: Mapping[str, str]) -> dict:
     return body
 
 
+def _parse_addresses(raw: str) -> tuple[str, ...]:
+    return tuple(a.strip() for a in raw.split(",") if a.strip())
+
+
+def parse_email_routes(raw: str) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """EMAIL_ROUTES: "AWAD_IVRrecord_*=a@x.ru; GATE_*=b@y.ru,c@y.ru" → ((glob, addrs), …)."""
+    routes = []
+    for chunk in raw.split(";"):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        pattern, sep, addresses = chunk.partition("=")
+        pattern, recipients = pattern.strip(), _parse_addresses(addresses)
+        if not sep or not pattern or not recipients or any(
+            "@" not in a or " " in a for a in recipients
+        ):
+            raise ConfigError(
+                f"EMAIL_ROUTES entry must look like 'PREFIX_*=user@example.ru': {chunk!r}"
+            )
+        routes.append((pattern, recipients))
+    return tuple(routes)
+
+
 def parse_known_domains(raw: str) -> list[tuple[list[str], str]]:
     """KNOWN_EMAIL_DOMAINS: "Company|Alias=domain.ru; Other=other.com" → [(names, domain)]."""
     entries = []
@@ -192,9 +217,10 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
     if email_enabled:
         smtp_host = _require(env, "SMTP_HOST")
         email_from = _require(env, "EMAIL_FROM")
-        email_to = tuple(a.strip() for a in _require(env, "EMAIL_TO").split(",") if a.strip())
+        email_to = _parse_addresses(_require(env, "EMAIL_TO"))
+        email_routes = parse_email_routes(env.get("EMAIL_ROUTES", ""))
     else:
-        smtp_host, email_from, email_to = "", env.get("EMAIL_FROM", ""), ()
+        smtp_host, email_from, email_to, email_routes = "", env.get("EMAIL_FROM", ""), (), ()
     smtp_port = env.get("SMTP_PORT", "").strip()
     s3_scan_bucket, s3_scan_prefix = _parse_scan_url(env.get("S3_SCAN_URL", "").strip())
 
@@ -236,6 +262,7 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         smtp_timeout_seconds=int(env.get("SMTP_TIMEOUT_SECONDS", "30")),
         email_from=email_from,
         email_to=email_to,
+        email_routes=email_routes,
         max_retries=int(env.get("MAX_RETRIES", "3")),
         retry_backoff_cap_seconds=int(env.get("RETRY_BACKOFF_CAP_SECONDS", "300")),
         db_path=env.get("DB_PATH", "/data/jobs.db"),

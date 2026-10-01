@@ -22,6 +22,9 @@ Two services:
   FullText (plus FullText as a `{CallRecordId}.txt` attachment), or the error
   reason for a failed job. Each channel is retried independently until it
   accepts; one that already accepted is not resent.
+  `EMAIL_ROUTES` (`"AWAD_IVRrecord_*=a@x.ru; GATE_IVRrecord_*=b@y.ru"`) routes mail
+  by the recording's file name: the first matching glob (case-sensitive, folder
+  ignored) replaces `EMAIL_TO`, which stays the default for everything else.
   **Bucket scanner (optional):** with `S3_SCAN_URL=s3://bucket/prefix/` the
   service also polls that prefix every `S3_SCAN_INTERVAL_SECONDS` (300) and
   queues each *new* `.mp3`/`.wav` object exactly once — seen keys are stored in

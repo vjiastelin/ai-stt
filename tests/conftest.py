@@ -40,6 +40,7 @@ def service_config(tmp_path):
             smtp_timeout_seconds=5,
             email_from="",
             email_to=(),
+            email_routes=(),
             max_retries=3,
             retry_backoff_cap_seconds=300,
             db_path=str(tmp_path / "jobs.db"),

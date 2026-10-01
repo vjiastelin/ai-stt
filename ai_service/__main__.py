@@ -23,6 +23,8 @@ def main() -> None:
         cfg.bpm_callback_url or "-",
         ",".join(cfg.email_to) if cfg.email_enabled else "-", cfg.db_path,
     )
+    for pattern, recipients in cfg.email_routes:
+        logging.getLogger(__name__).info("email route: %s → %s", pattern, ",".join(recipients))
     for name, verify in (("WHISPER", cfg.whisper_verify_ssl), ("LLM", cfg.llm_verify_ssl)):
         if not verify:
             logging.getLogger(__name__).warning(
