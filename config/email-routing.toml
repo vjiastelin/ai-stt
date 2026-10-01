@@ -1,11 +1,17 @@
 # Email routing for ai-service (EMAIL_ROUTING_FILE). Order of checks:
-#   1. [[file_route]]  — the recording's file name (glob, case-sensitive)
-#   2. [[route]]       — the client recognized in the summary: e-mail domain
-#                        (subdomains match, most specific wins), then company name
-#                        (case/quotes/ООО/«Х5»≈«X5»-insensitive, whole words,
-#                        longest name wins)
-#   3. default         — nobody recognized, or not listed here
-# A domain or company in two routes is rejected at startup.
+#   1. [[file_route]]   — the recording's file name (glob, case-sensitive)
+#   2. [[route]]        — the client recognized in the summary: e-mail domain
+#                         (subdomains match, most specific wins), then company name
+#                         (case/quotes/ООО/«Х5»≈«X5»-insensitive, whole words,
+#                         longest name wins)
+#   3. default          — nobody recognized, or not listed here
+#
+# [[route.client]] = one client company: name + aliases + its domains. Clients with
+# domains also become the summary prompt's list of known corporate domains
+# ({KNOWN_EMAIL_DOMAINS}), so the LLM can complete an address whose domain was lost.
+# Bare `domains` / `companies` on a route still route mail but are NOT shown to the
+# LLM (no company↔domain pair) — move them into a client once the owner is known.
+# A domain or company listed twice is rejected at startup.
 
 default = "time017@aeroclub.team"
 
@@ -17,103 +23,217 @@ to = "anywayanyday-info-gate@yandex.ru"
 pattern = "GATE_IVRrecord_*"
 to = "info@go.gate.ru"
 
+# ── Альянс ───────────────────────────────────────────────────────────────────────
 [[route]]
 name = "Альянс"
 to = "time001@aeroclub.team"
-companies = [
-  "Асцензия", "Ascensia",
-  "Байер", "Bayer",
-  "Везерфорд", "Weatherford",
-  "Сервье", "Servier",
-  "Яков и Партнеры", "Yakov and Partners",
-  "Полюс Золото", "Полюс", "Polyus",
-]
-domains = [
-  "ascensia.com", "bayer.ru", "bayer.com", "weatherford.ru", "servier.com",
-  "yakov.partners", "polyus.com",
-]
 
+[[route.client]]
+name = "Асцензия"
+aliases = ["Ascensia"]
+domains = ["ascensia.com"]
+
+[[route.client]]
+name = "Байер"
+aliases = ["Bayer"]
+domains = ["bayer.ru", "bayer.com"]
+
+[[route.client]]
+name = "Везерфорд"
+aliases = ["Weatherford"]
+domains = ["weatherford.ru"]
+
+[[route.client]]
+name = "Сервье"
+aliases = ["Servier"]
+domains = ["servier.com"]
+
+[[route.client]]
+name = "Яков и Партнеры"
+aliases = ["Yakov and Partners"]
+domains = ["yakov.partners"]
+
+[[route.client]]
+name = "Полюс Золото"
+aliases = ["Полюс", "Polyus"]   # «Полюс Золото / Регионы ВВО» тоже совпадёт
+domains = ["polyus.com"]
+
+# ── ТрипХАБ ──────────────────────────────────────────────────────────────────────
 [[route]]
 name = "ТрипХАБ"
 to = "time002@aeroclub.team"
-companies = [
-  "Эйч энд Эн Холдинг", "H&N Holding",
-  "Торговый дом МУМТ", "МУМТ",
-  "Марс Холдинг",
-  "Билайн", "Вымпелком", "Beeline",
-]
-domains = ["itms.ru", "logmol.ru", "beeline.ru"]
+domains = ["itms.ru", "logmol.ru"]   # TODO: уточнить, чьи это домены
 
+[[route.client]]
+name = "Эйч энд Эн Холдинг"
+aliases = ["H&N Holding"]
+
+[[route.client]]
+name = "Торговый дом МУМТ"
+aliases = ["МУМТ"]
+
+[[route.client]]
+name = "Марс Холдинг"
+
+[[route.client]]
+name = "Билайн"
+aliases = ["Вымпелком", "Beeline"]
+domains = ["beeline.ru"]
+
+# ── Русал, Базел, Эн+, ГАЗ ───────────────────────────────────────────────────────
 [[route]]
 name = "Русал, Базел, Эн+, ГАЗ"
 to = "time003@aeroclub.team"
-companies = [
-  "Русал", "Rusal",
-  "Базел", "Базэл", "Базовый элемент",
-  "Эн+", "En+",
-  "ГАЗ", "Группа ГАЗ",
-]
-domains = [
-  # Эн+
-  "enplus.ru", "enplus-service.ru", "enplus-telecom.ru", "enplus-generation.ru",
-  "enplus-hydro.ru", "enplus-teplo-volga.ru", "enplus-ugol.ru", "enplus-univer.ru",
+domains = [   # TODO: уточнить компании (группа Эн+, Русал, Базел или ГАЗ?)
   "baikalenergy.com", "irkutskenergo.ru", "es.irkutskenergo.ru", "go-legend.ru",
   "horeca-ing.ru", "iesk.ru", "ikgs.ru", "npk.team", "progressagro.com",
-  "se-system.ru", "tkbaikalaqua.com",
-  # Русал
-  "rusal.com", "iso-serv.com",
-  # Базел
-  "proton-co.com",
-  # ГАЗ
-  "gaz.ru", "glavstroy.ru", "ncauto.ru", "ru.lactalis.com", "stt.ru", "ymzmotor.ru",
+  "se-system.ru", "tkbaikalaqua.com", "iso-serv.com", "proton-co.com",
+  "glavstroy.ru", "ncauto.ru", "ru.lactalis.com", "stt.ru", "ymzmotor.ru",
   "rubuses.ru", "umg.ru", "nautocom.ru", "l-terra.ru", "pac-org.ru",
 ]
 
+[[route.client]]
+name = "Эн+"
+aliases = ["En+"]
+domains = [
+  "enplus.ru", "enplus-service.ru", "enplus-telecom.ru", "enplus-generation.ru",
+  "enplus-hydro.ru", "enplus-teplo-volga.ru", "enplus-ugol.ru", "enplus-univer.ru",
+]
+
+[[route.client]]
+name = "Русал"
+aliases = ["Rusal"]
+domains = ["rusal.com"]
+
+[[route.client]]
+name = "Базел"
+aliases = ["Базэл", "Базовый элемент"]
+
+[[route.client]]
+name = "ГАЗ"
+aliases = ["Группа ГАЗ"]
+domains = ["gaz.ru"]
+
+# ── Триплайн ─────────────────────────────────────────────────────────────────────
 [[route]]
 name = "Триплайн"
 to = "time005@aeroclub.team"
-companies = [
-  "Леруа Мерлен", "Лемана Про", "Leroy Merlin", "Lemana Pro",
-  "Система ПБО",
-  "Такеда", "Takeda",
-  "X5", "X5 Group", "X5 Retail Group",   # «Х5» по-русски совпадает с латинским X5
-]
-domains = ["lemanapro.ru", "qsrsystem.ru", "takeda.com", "x5.ru"]
 
+[[route.client]]
+name = "Лемана Про"
+aliases = ["Леруа Мерлен", "Lemana Pro", "Leroy Merlin"]
+domains = ["lemanapro.ru"]
+
+[[route.client]]
+name = "Система ПБО"
+domains = ["qsrsystem.ru"]
+
+[[route.client]]
+name = "Такеда"
+aliases = ["Takeda"]
+domains = ["takeda.com"]
+
+[[route.client]]
+name = "X5"
+aliases = ["X5 Group", "X5 Retail Group"]   # «Х5» по-русски совпадает с латинским X5
+domains = ["x5.ru"]
+
+# ── Трип ─────────────────────────────────────────────────────────────────────────
 [[route]]
 name = "Трип"
 to = "time006@aeroclub.team"
-companies = [
-  "Берингер Ингельхайм", "Берингер Ингельхам", "Boehringer Ingelheim",
-  "Виатрис", "Viatris",
-  "Дельтализинг", "Дельта Лизинг",
-  "Детский мир",
-  "Кока-Кола", "Coca-Cola", "Мултон",
-  "Медтроник", "Medtronic",
-  "Монделез", "Mondelez",
-  "Нестле", "Nestle",
-  "ППР B2B",
-  "Пфайзер", "Pfizer",
-  "Рэдбулл", "Ред Булл", "Red Bull",
-  "Санофи", "Sanofi",
-  "Сен Гобен", "Saint-Gobain",
-  "Сименс", "Siemens",
-  "Тева", "Teva",
-  "Фронери", "Froneri",
-  "Телематика",
-]
-domains = [
-  "boehringer-ingelheim.com", "viatris.com", "deltaleasing.ru", "detmir.ru",
-  "multonpartners.com", "medtronic.com", "mdlz.com", "nestle.ru", "pfizer.com",
-  "redbull.com", "sanofi.com", "sgcp.ru", "teva.ru", "telematika.com",
-]
 
+[[route.client]]
+name = "Берингер Ингельхайм"
+aliases = ["Берингер Ингельхам", "Boehringer Ingelheim"]
+domains = ["boehringer-ingelheim.com"]
+
+[[route.client]]
+name = "Виатрис"
+aliases = ["Viatris"]
+domains = ["viatris.com"]
+
+[[route.client]]
+name = "Дельта Лизинг"
+aliases = ["Дельтализинг"]
+domains = ["deltaleasing.ru"]
+
+[[route.client]]
+name = "Детский мир"
+domains = ["detmir.ru"]
+
+[[route.client]]
+name = "Кока-Кола"
+aliases = ["Coca-Cola", "Мултон"]
+domains = ["multonpartners.com"]   # TODO: подтвердить, что это домен Кока-колы
+
+[[route.client]]
+name = "Медтроник"
+aliases = ["Medtronic"]
+domains = ["medtronic.com"]
+
+[[route.client]]
+name = "Монделез"
+aliases = ["Mondelez"]
+domains = ["mdlz.com"]
+
+[[route.client]]
+name = "Нестле"
+aliases = ["Nestle"]
+domains = ["nestle.ru"]
+
+[[route.client]]
+name = "ППР B2B"
+
+[[route.client]]
+name = "Пфайзер"
+aliases = ["Pfizer"]
+domains = ["pfizer.com"]
+
+[[route.client]]
+name = "Ред Булл"
+aliases = ["Рэдбулл", "Red Bull"]
+domains = ["redbull.com"]
+
+[[route.client]]
+name = "Санофи"
+aliases = ["Sanofi"]
+domains = ["sanofi.com"]
+
+[[route.client]]
+name = "Сен Гобен"
+aliases = ["Saint-Gobain"]
+domains = ["sgcp.ru"]   # TODO: подтвердить, что это домен Сен-Гобена
+
+[[route.client]]
+name = "Сименс"
+aliases = ["Siemens"]
+
+[[route.client]]
+name = "Тева"
+aliases = ["Teva"]
+domains = ["teva.ru"]
+
+[[route.client]]
+name = "Фронери"
+aliases = ["Froneri"]
+
+[[route.client]]
+name = "Телематика"
+domains = ["telematika.com"]
+
+# ── Дельта/Лента ─────────────────────────────────────────────────────────────────
 [[route]]
 name = "Дельта/Лента"
 to = "time007@aeroclub.team"
-companies = ["Дельта", "Лента"]
-domains = [
+domains = [   # TODO: уточнить, чьи это домены
   "bi.zone", "bsci.com", "cube-3d.ru", "energy-h.ru", "fngroup.ru", "kngk-group.ru",
   "kws.com", "mvideo.ru", "novonordisk.com", "pharmstd.ru", "rubytech.ru", "ventra.ru",
-  "lenta.com",
 ]
+
+[[route.client]]
+name = "Дельта"
+
+[[route.client]]
+name = "Лента"
+domains = ["lenta.com"]

@@ -165,8 +165,8 @@ def parse_email_routes(raw: str) -> tuple[tuple[str, tuple[str, ...]], ...]:
     return tuple(routes)
 
 
-def parse_known_domains(raw: str) -> list[tuple[list[str], str]]:
-    """KNOWN_EMAIL_DOMAINS: "Company|Alias=domain.ru; Other=other.com" → [(names, domain)]."""
+def parse_known_domains(raw: str) -> list[tuple[list[str], tuple[str, ...]]]:
+    """KNOWN_EMAIL_DOMAINS: "Company|Alias=domain.ru; Other=other.com" → [(names, (domain,))]."""
     entries = []
     for chunk in raw.split(";"):
         chunk = chunk.strip()
@@ -179,17 +179,21 @@ def parse_known_domains(raw: str) -> list[tuple[list[str], str]]:
             raise ConfigError(
                 f"KNOWN_EMAIL_DOMAINS entry must look like 'Компания|Синоним=domain.ru': {chunk!r}"
             )
-        entries.append((names, domain))
+        entries.append((names, (domain,)))
     return entries
 
 
-def render_summary_prompt(prompt: str, known_domains: list[tuple[list[str], str]]) -> str:
+def render_summary_prompt(
+    prompt: str, known_domains: list[tuple[list[str], tuple[str, ...]]]
+) -> str:
     """Put the known-domain list into the prompt at {KNOWN_EMAIL_DOMAINS}.
 
     Without the placeholder a non-empty list is appended as a last sentence, so
     the variable still has an effect with a prompt that predates it.
     """
-    rendered = "; ".join(f"{', '.join(names)} → {domain}" for names, domain in known_domains)
+    rendered = "; ".join(
+        f"{', '.join(names)} → {', '.join(domains)}" for names, domains in known_domains
+    )
     if KNOWN_DOMAINS_PLACEHOLDER in prompt:
         return prompt.replace(KNOWN_DOMAINS_PLACEHOLDER, rendered or "список пуст")
     if rendered:
@@ -262,7 +266,8 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         llm_extra_body=_parse_llm_extra_body(env),
         summary_prompt=render_summary_prompt(
             env.get("SUMMARY_PROMPT", DEFAULT_SUMMARY_PROMPT),
-            parse_known_domains(env.get("KNOWN_EMAIL_DOMAINS", "")),
+            # the routing file's clients first, then the KNOWN_EMAIL_DOMAINS extras
+            email_routing.known_domains() + parse_known_domains(env.get("KNOWN_EMAIL_DOMAINS", "")),
         ),
         bpm_callback_url=bpm_callback_url,
         bpm_csrf_token=env.get("BPM_CSRF_TOKEN", ""),

@@ -68,15 +68,15 @@ def test_route_for_client(company, email, to):
 
 @pytest.mark.parametrize("data,match", [
     ({"routes": []}, "unknown key"),
-    ({"route": [{"to": "a@x.ru"}]}, "needs `domains` and/or `companies`"),
+    ({"route": [{"to": "a@x.ru"}]}, "needs clients, `domains` and/or `companies`"),
     ({"route": [{"to": "nobody", "domains": ["x.ru"]}]}, "invalid address"),
     ({"route": [{"to": [], "domains": ["x.ru"]}]}, "`to` must be"),
     ({"route": [{"to": "a@x.ru", "domains": ["x"]}]}, "is not a domain"),
     ({"route": [{"to": "a@x.ru", "domain": ["x.ru"]}]}, "unknown key"),
     ({"route": [{"to": "a@x.ru", "domains": ["x.ru"]}, {"to": "b@x.ru", "domains": ["@X.ru"]}]},
-     "already in route #1"),
+     "already listed in route #1"),
     ({"route": [{"to": "a@x.ru", "companies": ["Х5"]}, {"to": "b@x.ru", "companies": ["X5"]}]},
-     "already in route #1"),
+     "already listed in route #1"),
     ({"file_route": [{"pattern": "A_*"}]}, "`to` must be"),
 ])
 def test_invalid_routing_rejected(data, match):
@@ -137,3 +137,71 @@ def test_committed_file_routes(repo_routing):
         "AWAD_IVRrecord_*": ("anywayanyday-info-gate@yandex.ru",),
         "GATE_IVRrecord_*": ("info@go.gate.ru",),
     }
+
+
+# --- [[route.client]] and the prompt's known-domain list ---------------------------------
+
+CLIENT_DATA = {
+    "route": [
+        {"to": "time001@aeroclub.team", "client": [
+            {"name": "Байер", "aliases": ["Bayer"], "domains": ["bayer.ru", "bayer.com"]},
+            {"name": "Сименс", "aliases": ["Siemens"]},
+        ]},
+        {"to": "time007@aeroclub.team", "domains": ["mvideo.ru"], "client": [
+            {"name": "Лента", "domains": ["lenta.com"]},
+        ]},
+    ],
+}
+
+
+def test_clients_route_by_domain_and_by_name_or_alias():
+    routing = parse_routing(CLIENT_DATA)
+    for company, email, to in [
+        ("не указано", "ivan@bayer.com", "time001@aeroclub.team"),
+        ("Bayer AG", "не указано", "time001@aeroclub.team"),
+        ("Сименс", "не указано", "time001@aeroclub.team"),        # client without domains
+        ("не указано", "ivan@mvideo.ru", "time007@aeroclub.team"),  # bare route domain
+    ]:
+        assert route_for_client(routing, summary(company, email)).to == (to,)
+
+
+def test_known_domains_lists_only_clients_with_domains():
+    assert parse_routing(CLIENT_DATA).known_domains() == [
+        (["Байер", "Bayer"], ("bayer.ru", "bayer.com")),
+        (["Лента"], ("lenta.com",)),
+    ]
+
+
+@pytest.mark.parametrize("client,match", [
+    ({"aliases": ["X"]}, "needs a `name`"),
+    ({"name": "X", "domain": ["x.ru"]}, "unknown key"),
+    ({"name": "X", "domains": ["bayer.ru"]}, "already listed in route #1, client 'Байер'"),
+    ({"name": "Bayer"}, "already listed in route #1, client 'Байер'"),
+])
+def test_invalid_clients_rejected(client, match):
+    data = {"route": [CLIENT_DATA["route"][0], {"to": "b@x.ru", "client": [client]}]}
+    with pytest.raises(RoutingError, match=match):
+        parse_routing(data)
+
+
+def test_prompt_gets_file_clients_then_known_email_domains_extras(tmp_path):
+    from tests.ai_service.test_config import EMAIL, REQUIRED
+
+    path = tmp_path / "routing.toml"
+    path.write_text('[[route]]\nto = "a@x.ru"\ndomains = ["mvideo.ru"]\n'
+                    '[[route.client]]\nname = "Байер"\naliases = ["Bayer"]\n'
+                    'domains = ["bayer.ru", "bayer.com"]\n', encoding="utf-8")
+    cfg = load_config({**REQUIRED, **EMAIL, "EMAIL_ROUTING_FILE": str(path),
+                       "KNOWN_EMAIL_DOMAINS": "Аэроклуб=aeroclub.ru",
+                       "SUMMARY_PROMPT": "4) Домены: {KNOWN_EMAIL_DOMAINS}."})
+    assert cfg.summary_prompt == (
+        "4) Домены: Байер, Bayer → bayer.ru, bayer.com; Аэроклуб → aeroclub.ru."
+    )
+
+
+def test_committed_table_feeds_the_prompt(repo_routing):
+    names = {names[0]: domains for names, domains in repo_routing.known_domains()}
+    assert names["Байер"] == ("bayer.ru", "bayer.com")
+    assert names["X5"] == ("x5.ru",)
+    assert "Сименс" not in names            # no domain → routing by name only
+    assert all(domains for domains in names.values())

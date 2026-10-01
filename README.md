@@ -122,8 +122,13 @@ Recipients are chosen per record from [`config/email-routing.toml`](config/email
   `EMAIL_ROUTES` can be dropped from the environment (if both are set,
   `EMAIL_ROUTES` is checked first). `EMAIL_TO` is still required and is used only
   when the table has no `default`.
+- Each `[[route.client]]` (company + aliases + domains) also feeds the summary
+  prompt's `{KNOWN_EMAIL_DOMAINS}` list, so the LLM can complete an address whose
+  domain was lost; `KNOWN_EMAIL_DOMAINS` now only adds pairs missing from the
+  table. Bare route-level `domains`/`companies` route mail but aren't shown to
+  the LLM — move them into a client once the owner is known.
 - A broken table (bad TOML, unknown key, invalid domain/address, a domain or
-  company in two routes) stops startup with the offending entry in the log; the
+  company listed twice) stops startup with the offending entry in the log; the
   committed table is also checked by `tests/ai_service/test_routing.py`.
 
 ## Monitoring

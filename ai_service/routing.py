@@ -7,11 +7,20 @@
     to = "anywayanyday-info-gate@yandex.ru"
 
     [[route]]                               # by the client recognized in the summary
+    name = "Альянс"                         # label only
     to = "time001@aeroclub.team"            # a string or a list of addresses
-    domains = ["bayer.ru", "bayer.com"]     # the client's e-mail domain (subdomains match)
-    companies = ["Байер", "Bayer"]          # fallback: the «Компания:» line
 
-A domain or company listed in two routes is a ConfigError, so a large table
+    [[route.client]]                        # one client company of this route
+    name = "Байер"                          # canonical name
+    aliases = ["Bayer"]                     # other spellings for the «Компания:» line
+    domains = ["bayer.ru", "bayer.com"]     # its e-mail domains (subdomains match)
+
+A route may also list bare `domains` / `companies` not yet tied to a client:
+they route mail but, having no company↔domain pair, are not shown to the LLM.
+Clients with domains become the summary prompt's {KNOWN_EMAIL_DOMAINS} list
+(«Байер, Bayer → bayer.ru, bayer.com»), so one table drives both.
+
+A domain or company listed twice is rejected at startup, so a large table
 can't silently send a client to two teams.
 """
 import re
@@ -30,10 +39,18 @@ _HOMOGLYPHS = str.maketrans("авекмнорстух", "abekmhopctyx")
 
 
 @dataclass(frozen=True)
+class Client:
+    name: str
+    aliases: tuple[str, ...]
+    domains: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ClientRoute:
     to: tuple[str, ...]
-    domains: tuple[str, ...]
-    companies: tuple[str, ...]  # normalized, see normalize_company()
+    domains: tuple[str, ...]    # all of the route's domains (clients' + bare)
+    companies: tuple[str, ...]  # all names/aliases, normalized (see normalize_company)
+    clients: tuple[Client, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -41,6 +58,13 @@ class Routing:
     file_routes: tuple[tuple[str, tuple[str, ...]], ...] = ()
     client_routes: tuple[ClientRoute, ...] = ()
     default: tuple[str, ...] = ()
+
+    def known_domains(self) -> list[tuple[list[str], tuple[str, ...]]]:
+        """(names, domains) of every client that has domains, for the summary prompt."""
+        return [
+            ([c.name, *c.aliases], c.domains)
+            for route in self.client_routes for c in route.clients if c.domains
+        ]
 
 
 def normalize_company(name: str) -> str:
@@ -84,33 +108,59 @@ def parse_routing(data: dict, source: str = "EMAIL_ROUTING_FILE") -> Routing:
         file_routes.append((table["pattern"].strip(), _addresses(table.get("to"), where)))
 
     client_routes, seen_domains, seen_companies = [], {}, {}
-    for i, table in enumerate(data.get("route", []), 1):
-        where = f"{source}: route #{i}"
-        unknown = set(table) - {"to", "domains", "companies", "name"}
-        if unknown:
-            raise RoutingError(f"{where}: unknown key(s) {', '.join(sorted(unknown))}")
-        to = _addresses(table.get("to"), where)
-        domains = []
-        for raw in _strings(table, "domains", where):
+
+    def take_domains(raws: list[str], where: str) -> list[str]:
+        out = []
+        for raw in raws:
             domain = raw.lower().lstrip("@")
             if not _DOMAIN_RE.match(domain):
-                raise RoutingError(f"{where}: {raw!r} is not a domain")
-            if domain in seen_domains and seen_domains[domain] != i:
-                raise RoutingError(f"{where}: domain {domain!r} is already in route #{seen_domains[domain]}")
-            seen_domains[domain] = i
-            domains.append(domain)
-        companies = []
-        for raw in _strings(table, "companies", where):
+                raise RoutingError(f"{source}: {where}: {raw!r} is not a domain")
+            if domain in seen_domains:
+                raise RoutingError(f"{source}: {where}: domain {domain!r} is already listed in {seen_domains[domain]}")
+            seen_domains[domain] = where
+            out.append(domain)
+        return out
+
+    def take_companies(raws: list[str], where: str) -> list[str]:
+        out = []
+        for raw in raws:
             key = normalize_company(raw)
             if not key:
-                raise RoutingError(f"{where}: company {raw!r} is empty after normalization")
-            if key in seen_companies and seen_companies[key] != i:
-                raise RoutingError(f"{where}: company {raw!r} is already in route #{seen_companies[key]}")
-            seen_companies[key] = i
-            companies.append(key)
+                raise RoutingError(f"{source}: {where}: company {raw!r} is empty after normalization")
+            if key in seen_companies:
+                raise RoutingError(f"{source}: {where}: company {raw!r} is already listed in {seen_companies[key]}")
+            seen_companies[key] = where
+            out.append(key)
+        return out
+
+    for i, table in enumerate(data.get("route", []), 1):
+        where = f"route #{i}"
+        unknown = set(table) - {"to", "domains", "companies", "name", "client"}
+        if unknown:
+            raise RoutingError(f"{source}: {where}: unknown key(s) {', '.join(sorted(unknown))}")
+        to = _addresses(table.get("to"), f"{source}: {where}")
+        clients, domains, companies = [], [], []
+        for j, client in enumerate(table.get("client", []), 1):
+            cwhere = f"{where}, client #{j}"
+            if not isinstance(client, dict):
+                raise RoutingError(f"{source}: {cwhere} must be a table")
+            unknown = set(client) - {"name", "aliases", "domains"}
+            if unknown:
+                raise RoutingError(f"{source}: {cwhere}: unknown key(s) {', '.join(sorted(unknown))}")
+            name = str(client.get("name", "")).strip()
+            if not name:
+                raise RoutingError(f"{source}: {cwhere} needs a `name`")
+            cwhere = f"{where}, client {name!r}"
+            aliases = _strings(client, "aliases", f"{source}: {cwhere}")
+            cdomains = take_domains(_strings(client, "domains", f"{source}: {cwhere}"), cwhere)
+            companies += take_companies([name, *aliases], cwhere)
+            domains += cdomains
+            clients.append(Client(name, tuple(aliases), tuple(cdomains)))
+        domains += take_domains(_strings(table, "domains", f"{source}: {where}"), where)
+        companies += take_companies(_strings(table, "companies", f"{source}: {where}"), where)
         if not domains and not companies:
-            raise RoutingError(f"{where} needs `domains` and/or `companies`")
-        client_routes.append(ClientRoute(to, tuple(dict.fromkeys(domains)), tuple(dict.fromkeys(companies))))
+            raise RoutingError(f"{source}: {where} needs clients, `domains` and/or `companies`")
+        client_routes.append(ClientRoute(to, tuple(domains), tuple(companies), tuple(clients)))
     return Routing(tuple(file_routes), tuple(client_routes), default)
 
 
