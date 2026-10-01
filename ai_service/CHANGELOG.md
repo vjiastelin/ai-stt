@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.10.0](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.9.0...ai-service-v0.10.0) (2026-10-01)
+
+
+### Features
+
+* [[route.client]] — one table for routing and the prompt's known domains ([265b54f](https://github.com/vjiastelin/ai-stt/commit/265b54f66cb2d5a2d6287e4a70ec493efa758941))
+* PROMPT_PROFILE with a tested `voicemail` prompt set ([7adc8da](https://github.com/vjiastelin/ai-stt/commit/7adc8dae0cfb87368da2122d0a59a3b5133696a9))
+* **prompts:** voicemail — known domains may list several per company ([cbc670b](https://github.com/vjiastelin/ai-stt/commit/cbc670bfdd5f16deaa9bc9f1c75e21237a579957))
+* routing stats per team, delivery view and routing dry run ([feb4354](https://github.com/vjiastelin/ai-stt/commit/feb435416f2a7b897b950d4611eed4cb23560449))
+* routing stats per team, delivery view and routing dry run ([e1ca454](https://github.com/vjiastelin/ai-stt/commit/e1ca4546915c42dc4ec6428ba72360f955cfaee3))
+* **routing:** assign every domain to a client, add spoken aliases ([3448ec4](https://github.com/vjiastelin/ai-stt/commit/3448ec41f1eea8860811201e725b3be385d31252))
+* see which clients miss the routing table (log, metric, report) ([08611be](https://github.com/vjiastelin/ai-stt/commit/08611be0dde0455c289415fcf5bb9ff7529094a3))
+* see which clients miss the routing table (log, metric, report) ([a61c34a](https://github.com/vjiastelin/ai-stt/commit/a61c34a4c364ed7e884ededec8915b4b4968c9f5))
+* TOML email routing file — route by client e-mail domain or company ([717d495](https://github.com/vjiastelin/ai-stt/commit/717d49588c4d040cc2a2a30d6bfee21248b25d1c))
+* TOML email routing file — route by client e-mail domain or company ([3f9c9e9](https://github.com/vjiastelin/ai-stt/commit/3f9c9e9ca061004efd11682d7f831b96e1a796fe))
+
 ## [0.9.0](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.8.0...ai-service-v0.9.0) (2026-10-01)
 
 
