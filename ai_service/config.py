@@ -7,13 +7,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from ai_service.prompts import CALL_SUMMARY_PROMPT, PROFILES
 from ai_service.routing import Routing, RoutingError, load_routing_file
 
-DEFAULT_SUMMARY_PROMPT = (
-    "Составь краткое содержание телефонного разговора на русском языке: "
-    "основная тема, договорённости, следующие шаги. "
-    "Отвечай только текстом краткого содержания."
-)
+DEFAULT_SUMMARY_PROMPT = CALL_SUMMARY_PROMPT
 
 
 # placeholder in SUMMARY_PROMPT replaced by the rendered KNOWN_EMAIL_DOMAINS list
@@ -53,6 +50,7 @@ class ServiceConfig:
     # {"chat_template_kwargs": {"enable_thinking": false}, "max_tokens": 1024}
     llm_extra_body: dict
     summary_prompt: str
+    prompt_profile: str
     bpm_callback_url: str
     bpm_csrf_token: str
     callback_timeout_seconds: int
@@ -201,6 +199,24 @@ def render_summary_prompt(
     return prompt
 
 
+def _resolve_prompts(env: Mapping[str, str]) -> tuple[str, str, str]:
+    """(profile, summary prompt, whisper prompt) from PROMPT_PROFILE + overrides.
+
+    A non-empty SUMMARY_PROMPT replaces the profile's summary prompt. WHISPER_PROMPT
+    replaces the profile's whisper prompt whenever it is set — set it empty to send
+    no prompt at all.
+    """
+    profile = env.get("PROMPT_PROFILE", "call").strip().lower() or "call"
+    if profile not in PROFILES:
+        raise ConfigError(
+            f"PROMPT_PROFILE must be one of {', '.join(PROFILES)}: {profile!r}"
+        )
+    summary_default, whisper_default = PROFILES[profile]
+    summary = env.get("SUMMARY_PROMPT", "").strip() or summary_default
+    whisper = env["WHISPER_PROMPT"].strip() if "WHISPER_PROMPT" in env else whisper_default
+    return profile, summary, whisper
+
+
 def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
     summary_enabled = env.get("SUMMARY_ENABLED", "true").strip().lower() in ("1", "true", "yes")
     if summary_enabled:
@@ -239,6 +255,7 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         smtp_host, email_from, email_to, email_routes = "", env.get("EMAIL_FROM", ""), (), ()
         email_routing = Routing()
     smtp_port = env.get("SMTP_PORT", "").strip()
+    prompt_profile, summary_prompt, whisper_prompt = _resolve_prompts(env)
     s3_scan_bucket, s3_scan_prefix = _parse_scan_url(env.get("S3_SCAN_URL", "").strip())
 
     return ServiceConfig(
@@ -255,7 +272,7 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         whisper_api_key=env.get("WHISPER_API_KEY", ""),
         # false accepts self-signed/mismatched certs (ephemeral GPU instances)
         whisper_verify_ssl=_flag(env, "WHISPER_VERIFY_SSL", True),
-        whisper_prompt=env.get("WHISPER_PROMPT", "").strip(),
+        whisper_prompt=whisper_prompt,
         language=env.get("LANGUAGE", "ru"),
         summary_enabled=summary_enabled,
         llm_api_url=llm_api_url,
@@ -264,8 +281,9 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         llm_timeout_seconds=int(env.get("LLM_TIMEOUT_SECONDS", "120")),
         llm_verify_ssl=_flag(env, "LLM_VERIFY_SSL", True),
         llm_extra_body=_parse_llm_extra_body(env),
+        prompt_profile=prompt_profile,
         summary_prompt=render_summary_prompt(
-            env.get("SUMMARY_PROMPT", DEFAULT_SUMMARY_PROMPT),
+            summary_prompt,
             # the routing file's clients first, then the KNOWN_EMAIL_DOMAINS extras
             email_routing.known_domains() + parse_known_domains(env.get("KNOWN_EMAIL_DOMAINS", "")),
         ),

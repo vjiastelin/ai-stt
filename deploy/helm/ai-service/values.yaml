@@ -147,7 +147,8 @@ config:
   # "false" accepts self-signed / IP-mismatched certs of whisper-api (not verified!)
   # WHISPER_VERIFY_SSL: "true"
   # hint for Whisper (OpenAI `prompt` field), e.g. to keep "@" in dictated e-mails
-  # WHISPER_PROMPT: "Клиент диктует корпоративную почту, например: ivan.petrov@aeroclub.ru. Компания Аэроклуб, aeroclub.ru."
+  # overrides PROMPT_PROFILE's Whisper hint; spell example e-mails in words, not with "@"
+  # WHISPER_PROMPT: "Клиент диктует почту словами, например: иванов точка петров собачка ромашка точка ру."
   LANGUAGE: "ru"
   SUMMARY_ENABLED: "false"
   LLM_API_URL: "http://vllm.example.kz:8000/v1"
@@ -156,7 +157,10 @@ config:
   # LLM_VERIFY_SSL: "true"
   # JSON merged into the LLM request, e.g. disable Qwen3 thinking + cap output:
   # LLM_EXTRA_BODY: '{"chat_template_kwargs":{"enable_thinking":false},"max_tokens":1024}'
-  # SUMMARY_PROMPT: ""   # falls back to the Russian default in config.py
+  # built-in prompts (ai_service/prompts.py): "call" (default, BPM calls) or
+  # "voicemail" (IVR voice messages: name/company/e-mail extraction + Whisper hint)
+  # PROMPT_PROFILE: "call"
+  # SUMMARY_PROMPT: ""   # non-empty overrides the profile's summary prompt
   # client companies → e-mail domains, rendered into SUMMARY_PROMPT at {KNOWN_EMAIL_DOMAINS}
   # KNOWN_EMAIL_DOMAINS: "Аэроклуб|Аэроклуб ИТ=aeroclub.ru; Ромашка=romashka-group.ru"
   # base URL of the BPM host; the result path (…/transcriptions/{id}/result) is fixed in code

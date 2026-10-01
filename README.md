@@ -55,10 +55,18 @@ instances reached by IP) can be used with `WHISPER_VERIFY_SSL=false` /
 `LLM_VERIFY_SSL=false`: traffic stays encrypted but the server is not
 authenticated, and a warning is logged at startup.
 
+Prompts come in built-in profiles (`ai_service/prompts.py`), picked with
+`PROMPT_PROFILE`: `call` (default) summarizes a regular BPM phone call;
+`voicemail` handles IVR voice messages — a six-line Имя/Компания/Почта/Суть/
+Детали/Срочность summary that assembles e-mails dictated in words, plus a
+Whisper hint. `SUMMARY_PROMPT` (when non-empty) and `WHISPER_PROMPT` (whenever
+set, empty = no hint) override the profile.
+
 `WHISPER_PROMPT` is sent as the OpenAI `prompt` field (whisper-api maps it to
-faster-whisper's `initial_prompt`, overriding one set in `TRANSCRIBE_OPTIONS`):
-a short vocabulary hint such as an example e-mail address and company/domain
-names makes Whisper keep `@` and domains in dictated addresses.
+faster-whisper's `initial_prompt`, overriding one set in `TRANSCRIBE_OPTIONS`).
+Spell example e-mails out in words ("… собачка … точка ру"): that keeps the
+dictation intact in the transcript, while an example address with `@` made
+Whisper assemble addresses itself and get them wrong.
 
 Summaries come from an external OpenAI-compatible LLM (`LLM_API_URL`);
 set `SUMMARY_ENABLED=false` to skip summarization (Summary is sent as `""`).
