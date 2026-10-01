@@ -3,6 +3,7 @@
     default = "time017@aeroclub.team"      # optional: replaces EMAIL_TO as the fallback
 
     [[file_route]]                          # optional, checked first, after EMAIL_ROUTES
+    name = "Anywayanyday"                   # optional label for the routing stats
     pattern = "AWAD_IVRrecord_*"            # glob on the recording's file name
     to = "anywayanyday-info-gate@yandex.ru"
 
@@ -51,6 +52,7 @@ class ClientRoute:
     domains: tuple[str, ...]    # all of the route's domains (clients' + bare)
     companies: tuple[str, ...]  # all names/aliases, normalized (see normalize_company)
     clients: tuple[Client, ...] = ()
+    name: str = ""              # the route's `name` (team label), "route #N" if absent
 
 
 @dataclass(frozen=True)
@@ -58,6 +60,7 @@ class Routing:
     file_routes: tuple[tuple[str, tuple[str, ...]], ...] = ()
     client_routes: tuple[ClientRoute, ...] = ()
     default: tuple[str, ...] = ()
+    file_route_names: tuple[tuple[str, str], ...] = ()  # (pattern, name) of [[file_route]]
 
     def known_domains(self) -> list[tuple[list[str], tuple[str, ...]]]:
         """(names, domains) of every client that has domains, for the summary prompt."""
@@ -100,12 +103,14 @@ def parse_routing(data: dict, source: str = "EMAIL_ROUTING_FILE") -> Routing:
         raise RoutingError(f"{source}: unknown key(s) {', '.join(sorted(unknown))}")
     default = _addresses(data["default"], f"{source}: default") if "default" in data else ()
 
-    file_routes = []
+    file_routes, file_route_names = [], []
     for i, table in enumerate(data.get("file_route", []), 1):
         where = f"{source}: file_route #{i}"
-        if set(table) - {"pattern", "to"} or not str(table.get("pattern", "")).strip():
-            raise RoutingError(f"{where} needs exactly `pattern` and `to`")
-        file_routes.append((table["pattern"].strip(), _addresses(table.get("to"), where)))
+        if set(table) - {"pattern", "to", "name"} or not str(table.get("pattern", "")).strip():
+            raise RoutingError(f"{where} needs `pattern` and `to` (and an optional `name`)")
+        pattern = table["pattern"].strip()
+        file_routes.append((pattern, _addresses(table.get("to"), where)))
+        file_route_names.append((pattern, str(table.get("name", "")).strip() or pattern))
 
     client_routes, seen_domains, seen_companies = [], {}, {}
 
@@ -162,8 +167,9 @@ def parse_routing(data: dict, source: str = "EMAIL_ROUTING_FILE") -> Routing:
         companies += take_companies(_strings(table, "companies", f"{source}: {where}"), where)
         if not domains and not companies:
             raise RoutingError(f"{source}: {where} needs clients, `domains` and/or `companies`")
-        client_routes.append(ClientRoute(to, tuple(domains), tuple(companies), tuple(clients)))
-    return Routing(tuple(file_routes), tuple(client_routes), default)
+        name = str(table.get("name", "")).strip() or where
+        client_routes.append(ClientRoute(to, tuple(domains), tuple(companies), tuple(clients), name))
+    return Routing(tuple(file_routes), tuple(client_routes), default, tuple(file_route_names))
 
 
 def load_routing_file(path: str) -> Routing:

@@ -16,6 +16,18 @@ def result_url(cfg: ServiceConfig, call_record_id: str) -> str:
     return cfg.bpm_callback_url + _RESULT_PATH.format(call_record_id=call_record_id)
 
 
+def build_payload(
+    summary: str, full_text: str, error: bool = False, error_description: str = ""
+) -> dict:
+    """The body POSTed to BPM — the fixed contract, no extra fields."""
+    return {
+        "Summary": summary,
+        "FullText": full_text,
+        "Error": error,
+        "ErrorDescription": error_description,
+    }
+
+
 def deliver(
     cfg: ServiceConfig,
     call_record_id: str,
@@ -24,12 +36,7 @@ def deliver(
     error: bool = False,
     error_description: str = "",
 ) -> None:
-    payload = {
-        "Summary": summary,
-        "FullText": full_text,
-        "Error": error,
-        "ErrorDescription": error_description,
-    }
+    payload = build_payload(summary, full_text, error, error_description)
     headers = {"x-api-key": cfg.bpm_csrf_token} if cfg.bpm_csrf_token else None
     try:
         response = httpx.post(

@@ -39,7 +39,13 @@ def test_route_message_reports_the_rule(cfg, url, company, email, by):
 
 
 def _counter(by):
-    return metrics.EMAIL_ROUTED.labels(by=by)._value.get()
+    """Sum of ai_service_email_routed_total{by=…} over every mailbox."""
+    return sum(
+        sample.value
+        for family in metrics.EMAIL_ROUTED.collect()
+        for sample in family.samples
+        if sample.name.endswith("_total") and sample.labels.get("by") == by
+    )
 
 
 def test_sent_result_mail_is_counted_and_default_is_logged(cfg, monkeypatch, caplog):

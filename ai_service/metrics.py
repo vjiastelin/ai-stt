@@ -49,8 +49,13 @@ STAGE_ERRORS = Counter(
 )
 EMAIL_ROUTED = Counter(
     "ai_service_email_routed_total",
-    "Result e-mails sent, by the rule that picked the recipients",
-    ["by"],  # file | domain | company | default
+    "Result e-mails sent, by the rule that picked the recipients and the mailbox",
+    ["by", "mailbox"],  # file | domain | company | default; comma-joined recipients
+)
+ROUTED = Counter(
+    "ai_service_routed_total",
+    "Delivered results by the team (route) they were attributed to — any channel",
+    ["route", "by"],  # route name from the routing table / "default"
 )
 E2E_SECONDS = Histogram(
     "ai_service_job_end_to_end_seconds",

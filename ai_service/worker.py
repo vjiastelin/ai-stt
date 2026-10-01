@@ -169,5 +169,11 @@ class Worker:
             self.store.set_status(job.call_record_id, "failed")
             metrics.JOBS_RESOLVED.labels(status="failed").inc()
         else:
+            # which team the call belongs to — for every channel, BPM included; the
+            # e-mail recipients are those mailer.deliver used (same rules, same input)
+            decision = mailer.route_message(self.cfg, job.call_record_url, job.summary or "")
+            emailed_to = ",".join(decision.to) if self.cfg.email_enabled else ""
+            self.store.set_routing(job.call_record_id, decision.route, decision.by, emailed_to)
+            metrics.ROUTED.labels(route=decision.route or "default", by=decision.by).inc()
             self.store.set_status(job.call_record_id, "done")
             metrics.observe_delivered(job.created_at)

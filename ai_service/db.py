@@ -15,7 +15,11 @@ CREATE TABLE IF NOT EXISTS jobs (
     summary         TEXT,
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL,
-    delivered_to    TEXT NOT NULL DEFAULT ''
+    delivered_to    TEXT NOT NULL DEFAULT '',
+    route           TEXT NOT NULL DEFAULT '',
+    route_by        TEXT NOT NULL DEFAULT '',
+    emailed_to      TEXT NOT NULL DEFAULT '',
+    routed_at       TEXT NOT NULL DEFAULT ''
 )
 """
 
@@ -35,6 +39,12 @@ CREATE TABLE IF NOT EXISTS s3_objects (
 # columns added after the first release; ALTERed into pre-existing databases on open
 _MIGRATIONS = {
     "delivered_to": "ALTER TABLE jobs ADD COLUMN delivered_to TEXT NOT NULL DEFAULT ''",
+    # which team the delivered result was attributed to, by which rule, and where
+    # the e-mail actually went — recorded once delivery finishes (routing stats)
+    "route": "ALTER TABLE jobs ADD COLUMN route TEXT NOT NULL DEFAULT ''",
+    "route_by": "ALTER TABLE jobs ADD COLUMN route_by TEXT NOT NULL DEFAULT ''",
+    "emailed_to": "ALTER TABLE jobs ADD COLUMN emailed_to TEXT NOT NULL DEFAULT ''",
+    "routed_at": "ALTER TABLE jobs ADD COLUMN routed_at TEXT NOT NULL DEFAULT ''",
 }
 
 
@@ -52,6 +62,10 @@ class Job:
     # comma-separated delivery channels ("bpm", "email") that already accepted the
     # current result, so a retry resends only to the channels that failed
     delivered_to: str = ""
+    route: str = ""
+    route_by: str = ""        # file | domain | company | default; "" = not routed yet
+    emailed_to: str = ""      # comma-separated recipients of the result e-mail
+    routed_at: str = ""
 
     @property
     def delivered_channels(self) -> set[str]:
@@ -218,6 +232,7 @@ class JobStore:
                 summary=summary,
                 error=None,  # clear any error left by an earlier transient retry
                 delivered_to="",
+                route="", route_by="", emailed_to="", routed_at="",
                 status="delivering",
             )
 
@@ -246,6 +261,21 @@ class JobStore:
             )
             self._conn.commit()
             return self._fetch(call_record_id).attempts
+
+    def set_routing(self, call_record_id: str, route: str, route_by: str, emailed_to: str) -> None:
+        with self._lock:
+            self._update(call_record_id, route=route, route_by=route_by,
+                         emailed_to=emailed_to, routed_at=_now())
+
+    def list_routed_since(self, since: str) -> list[Job]:
+        """Delivered results attributed to a route at or after `since`."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM jobs WHERE route_by != '' AND routed_at >= ?"
+                " ORDER BY routed_at, call_record_id",
+                (since,),
+            ).fetchall()
+            return [self._row_to_job(row) for row in rows]
 
     def list_summaries_since(self, since: str) -> list[Job]:
         """Processed jobs (with a summary) created at or after `since` (a stored timestamp)."""

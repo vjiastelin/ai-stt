@@ -46,6 +46,13 @@ Two services:
   `GET /routing/unmatched?days=30` lists clients (company + e-mail domain) whose
   mail went to the default mailbox, most calls first — candidates for the routing
   table (summaries are re-routed with the current table, so added clients drop out).
+  `GET /routing/stats?days=30` — delivered results per team (route) and rule, as
+  recorded at delivery, for any channel (BPM-only setups too), with the mailboxes
+  e-mails went to. `GET /jobs/{CallRecordId}/delivery` — what was / would be sent:
+  the BPM payload, the e-mail (recipients, subject, body, attachment), the
+  recorded routing and where it would go with the current table.
+  `POST /routing/preview` (`{"CallRecordUrl": "…", "Summary": "…"}`) — dry run:
+  which team / mailbox a summary would be routed to, without a call.
   `GET /healthz` liveness.
 - **whisper-api** — FastAPI + faster-whisper (GPU or CPU, `DEVICE=cuda|cpu`),
   OpenAI-compatible transcription at `POST /v1/audio/transcriptions` (multipart
@@ -138,6 +145,9 @@ Recipients are chosen per record from [`config/email-routing.toml`](config/email
   domain was lost; `KNOWN_EMAIL_DOMAINS` now only adds pairs missing from the
   table. Bare route-level `domains`/`companies` route mail but aren't shown to
   the LLM — move them into a client once the owner is known.
+- The table is loaded even without the email channel: it also tells which team a
+  call belongs to, which `GET /routing/stats` reports for BPM-only setups. Nothing
+  is added to the BPM payload.
 - To see who is missing from the table: `GET /routing/unmatched?days=30`; every
   result mail sent to the default mailbox is also logged as
   `email routed to default: id=… company=… domain=…`, and

@@ -35,6 +35,7 @@ class RoutingDecision:
     by: str        # file | domain | company | default
     company: str   # «Компания:» as recognized ("" if none)
     domain: str    # domain of the client's address ("" if none)
+    route: str = ""  # team label: the route's / file rule's name, "" for default
 
 
 def route_message(cfg: ServiceConfig, call_record_url: str, summary: str = "") -> RoutingDecision:
@@ -48,12 +49,13 @@ def route_message(cfg: ServiceConfig, call_record_url: str, summary: str = "") -
     company, domain = client_company(summary), client_email_domain(summary)
     if call_record_url:
         name = PurePosixPath(urllib.parse.unquote(urllib.parse.urlparse(call_record_url).path)).name
+        names = dict(cfg.email_routing.file_route_names)
         for pattern, recipients in cfg.email_routes:
             if fnmatch.fnmatchcase(name, pattern):
-                return RoutingDecision(recipients, "file", company, domain)
+                return RoutingDecision(recipients, "file", company, domain, names.get(pattern, pattern))
     route, by = match_client(cfg.email_routing, summary)
     if route is not None:
-        return RoutingDecision(route.to, by, company, domain)
+        return RoutingDecision(route.to, by, company, domain, route.name)
     return RoutingDecision(cfg.email_routing.default or cfg.email_to, "default", company, domain)
 
 
@@ -144,7 +146,7 @@ def deliver(
     if not error:
         # result mails only: failure mails carry no summary and would always count as default
         decision = route_message(cfg, call_record_url, summary)
-        metrics.EMAIL_ROUTED.labels(by=decision.by).inc()
+        metrics.EMAIL_ROUTED.labels(by=decision.by, mailbox=",".join(decision.to)).inc()
         if decision.by == "default":
             logger.info(
                 "email routed to default: id=%s company=%r domain=%r",
