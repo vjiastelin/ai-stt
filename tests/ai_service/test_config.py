@@ -195,3 +195,39 @@ def test_known_domains_appended_when_prompt_has_no_placeholder():
 def test_invalid_known_domains_raise(raw):
     with pytest.raises(ConfigError, match="KNOWN_EMAIL_DOMAINS"):
         load_config({**REQUIRED, "KNOWN_EMAIL_DOMAINS": raw})
+
+
+def test_call_profile_is_the_default_and_unchanged():
+    cfg = load_config(REQUIRED)
+    assert cfg.prompt_profile == "call"
+    assert cfg.summary_prompt == DEFAULT_SUMMARY_PROMPT
+    assert cfg.whisper_prompt == ""
+
+
+def test_voicemail_profile_sets_both_prompts_and_renders_known_domains():
+    from ai_service.prompts import VOICEMAIL_WHISPER_PROMPT
+
+    cfg = load_config({**REQUIRED, "PROMPT_PROFILE": "Voicemail",
+                       "KNOWN_EMAIL_DOMAINS": "Аэроклуб|Аэроклуб ИТ=aeroclub.ru"})
+    assert cfg.prompt_profile == "voicemail"
+    assert cfg.whisper_prompt == VOICEMAIL_WHISPER_PROMPT
+    assert "{KNOWN_EMAIL_DOMAINS}" not in cfg.summary_prompt
+    assert "4) Известные корпоративные домены клиентов: Аэроклуб, Аэроклуб ИТ → aeroclub.ru." in cfg.summary_prompt
+    assert cfg.summary_prompt.endswith("Срочность: срочно и почему, или «не указана»")
+
+
+def test_explicit_prompts_override_the_profile():
+    env = {**REQUIRED, "PROMPT_PROFILE": "voicemail",
+           "SUMMARY_PROMPT": "Свой промт.", "WHISPER_PROMPT": "Своя подсказка."}
+    cfg = load_config(env)
+    assert (cfg.summary_prompt, cfg.whisper_prompt) == ("Свой промт.", "Своя подсказка.")
+    # an empty WHISPER_PROMPT turns the profile's Whisper hint off; empty SUMMARY_PROMPT doesn't
+    cfg = load_config({**REQUIRED, "PROMPT_PROFILE": "voicemail",
+                       "WHISPER_PROMPT": "", "SUMMARY_PROMPT": " "})
+    assert cfg.whisper_prompt == ""
+    assert cfg.summary_prompt.startswith("Ты обрабатываешь автоматические расшифровки")
+
+
+def test_unknown_prompt_profile_raises():
+    with pytest.raises(ConfigError, match="PROMPT_PROFILE"):
+        load_config({**REQUIRED, "PROMPT_PROFILE": "ivr"})

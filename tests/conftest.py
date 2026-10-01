@@ -29,6 +29,7 @@ def service_config(tmp_path):
             llm_verify_ssl=True,
             llm_extra_body={},
             summary_prompt="Составь краткое содержание.",
+            prompt_profile="call",
             bpm_callback_url="http://bpm",
             bpm_csrf_token="",
             callback_timeout_seconds=5,
