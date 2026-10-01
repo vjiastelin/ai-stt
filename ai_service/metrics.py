@@ -47,6 +47,11 @@ STAGE_ERRORS = Counter(
     "Stage failures by error taxonomy",
     ["stage", "kind"],
 )
+EMAIL_ROUTED = Counter(
+    "ai_service_email_routed_total",
+    "Result e-mails sent, by the rule that picked the recipients",
+    ["by"],  # file | domain | company | default
+)
 E2E_SECONDS = Histogram(
     "ai_service_job_end_to_end_seconds",
     "Enqueue (created_at) to successful delivery to all channels (BPM/email)",

@@ -247,6 +247,17 @@ class JobStore:
             self._conn.commit()
             return self._fetch(call_record_id).attempts
 
+    def list_summaries_since(self, since: str) -> list[Job]:
+        """Processed jobs (with a summary) created at or after `since` (a stored timestamp)."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM jobs WHERE created_at >= ? AND full_text IS NOT NULL"
+                " AND summary IS NOT NULL AND summary != ''"
+                " ORDER BY created_at, call_record_id",
+                (since,),
+            ).fetchall()
+            return [self._row_to_job(row) for row in rows]
+
     def mark_failed(self, call_record_id: str, error: str) -> None:
         with self._lock:
             self._update(call_record_id, status="failed", error=error)

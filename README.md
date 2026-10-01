@@ -43,6 +43,9 @@ Two services:
   Inspection endpoints: `GET /jobs` (list, newest first, `?status=` filter +
   `limit`/`offset`), `GET /jobs/{CallRecordId}` (status), and
   `GET /jobs/{CallRecordId}/result` (the `Summary` and `FullText`).
+  `GET /routing/unmatched?days=30` lists clients (company + e-mail domain) whose
+  mail went to the default mailbox, most calls first — candidates for the routing
+  table (summaries are re-routed with the current table, so added clients drop out).
   `GET /healthz` liveness.
 - **whisper-api** — FastAPI + faster-whisper (GPU or CPU, `DEVICE=cuda|cpu`),
   OpenAI-compatible transcription at `POST /v1/audio/transcriptions` (multipart
@@ -135,6 +138,11 @@ Recipients are chosen per record from [`config/email-routing.toml`](config/email
   domain was lost; `KNOWN_EMAIL_DOMAINS` now only adds pairs missing from the
   table. Bare route-level `domains`/`companies` route mail but aren't shown to
   the LLM — move them into a client once the owner is known.
+- To see who is missing from the table: `GET /routing/unmatched?days=30`; every
+  result mail sent to the default mailbox is also logged as
+  `email routed to default: id=… company=… domain=…`, and
+  `ai_service_email_routed_total{by="file|domain|company|default"}` counts mails
+  per rule.
 - A broken table (bad TOML, unknown key, invalid domain/address, a domain or
   company listed twice) stops startup with the offending entry in the log; the
   committed table is also checked by `tests/ai_service/test_routing.py`.
