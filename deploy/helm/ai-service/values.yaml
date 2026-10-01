@@ -169,7 +169,9 @@ config:
   # SMTP_USERNAME: ""
   # SMTP_TIMEOUT_SECONDS: "30"
   # EMAIL_FROM: "stt@example.kz"
-  # EMAIL_TO: "ops@example.kz,qa@example.kz"
+  # EMAIL_TO: "ops@example.kz,qa@example.kz"   # default recipients
+  # per-file-name routing, first match wins (see .env.example)
+  # EMAIL_ROUTES: "AWAD_IVRrecord_*=anywayanyday-info-gate@yandex.ru; GATE_IVRrecord_*=info@go.gate.ru"
   MAX_RETRIES: "3"
   RETRY_BACKOFF_CAP_SECONDS: "300"
   DB_PATH: "/data/jobs.db"
