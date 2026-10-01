@@ -212,7 +212,7 @@ def test_voicemail_profile_sets_both_prompts_and_renders_known_domains():
     assert cfg.prompt_profile == "voicemail"
     assert cfg.whisper_prompt == VOICEMAIL_WHISPER_PROMPT
     assert "{KNOWN_EMAIL_DOMAINS}" not in cfg.summary_prompt
-    assert "4) Известные корпоративные домены клиентов: Аэроклуб, Аэроклуб ИТ → aeroclub.ru." in cfg.summary_prompt
+    assert "домены этой компании): Аэроклуб, Аэроклуб ИТ → aeroclub.ru.\n5)" in cfg.summary_prompt
     assert cfg.summary_prompt.endswith("Срочность: срочно и почему, или «не указана»")
 
 
