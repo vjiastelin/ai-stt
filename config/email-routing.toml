@@ -18,10 +18,12 @@
 default = "time017@aeroclub.team"
 
 [[file_route]]
+name = "Anywayanyday"
 pattern = "AWAD_IVRrecord_*"
 to = "anywayanyday-info-gate@yandex.ru"
 
 [[file_route]]
+name = "Gate"
 pattern = "GATE_IVRrecord_*"
 to = "info@go.gate.ru"
 

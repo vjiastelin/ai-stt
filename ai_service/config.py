@@ -242,18 +242,19 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         smtp_host = _require(env, "SMTP_HOST")
         email_from = _require(env, "EMAIL_FROM")
         email_to = _parse_addresses(_require(env, "EMAIL_TO"))
-        email_routes = parse_email_routes(env.get("EMAIL_ROUTES", ""))
-        email_routing = Routing()
-        routing_file = env.get("EMAIL_ROUTING_FILE", "").strip()
-        if routing_file:
-            try:
-                email_routing = load_routing_file(routing_file)
-            except RoutingError as exc:
-                raise ConfigError(str(exc)) from exc
-            email_routes += email_routing.file_routes  # EMAIL_ROUTES first, then the file's
     else:
-        smtp_host, email_from, email_to, email_routes = "", env.get("EMAIL_FROM", ""), (), ()
-        email_routing = Routing()
+        smtp_host, email_from, email_to = "", env.get("EMAIL_FROM", ""), ()
+    # loaded with or without the email channel: the table also says which team a
+    # call belongs to, which the routing stats report for BPM-only setups too
+    email_routes = parse_email_routes(env.get("EMAIL_ROUTES", ""))
+    email_routing = Routing()
+    routing_file = env.get("EMAIL_ROUTING_FILE", "").strip()
+    if routing_file:
+        try:
+            email_routing = load_routing_file(routing_file)
+        except RoutingError as exc:
+            raise ConfigError(str(exc)) from exc
+        email_routes += email_routing.file_routes  # EMAIL_ROUTES first, then the file's
     smtp_port = env.get("SMTP_PORT", "").strip()
     prompt_profile, summary_prompt, whisper_prompt = _resolve_prompts(env)
     s3_scan_bucket, s3_scan_prefix = _parse_scan_url(env.get("S3_SCAN_URL", "").strip())
