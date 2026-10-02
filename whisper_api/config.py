@@ -26,6 +26,9 @@ class ApiConfig:
     ssl_certfile: str = ""
     ssl_keyfile: str = ""
     ssl_keyfile_password: str = ""
+    # model download (see whisper_api/download.py)
+    download_retries: int = 5
+    download_timeout_seconds: int = 1800
 
 
 def _parse_bool(env: Mapping[str, str], name: str, default: bool) -> bool:
@@ -66,4 +69,6 @@ def load_config(env: Mapping[str, str] = os.environ) -> ApiConfig:
         ssl_certfile=env.get("SSL_CERTFILE", "").strip(),
         ssl_keyfile=env.get("SSL_KEYFILE", "").strip(),
         ssl_keyfile_password=env.get("SSL_KEYFILE_PASSWORD", ""),
+        download_retries=max(1, int(env.get("WHISPER_DOWNLOAD_RETRIES", "5"))),
+        download_timeout_seconds=int(env.get("WHISPER_DOWNLOAD_TIMEOUT_SECONDS", "1800")),
     )
