@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.10.0...ai-service-v0.10.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* route addresses Whisper glued into one word (annasobakabayer.com) ([#41](https://github.com/vjiastelin/ai-stt/issues/41)) ([0ff951c](https://github.com/vjiastelin/ai-stt/commit/0ff951cd39c1a5441843ca27fa868e9a122afc78))
+
 ## [0.10.0](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.9.0...ai-service-v0.10.0) (2026-10-01)
 
 
