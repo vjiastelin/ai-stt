@@ -85,7 +85,8 @@ domains = ["effem.com"]
 
 [[route.client]]
 name = "Билайн"
-aliases = ["Вымпелком", "Вымпел-Коммуникации", "Beeline", "VimpelCom"]
+aliases = ["Вымпелком", "Вымпел-Коммуникации", "Beeline", "VimpelCom",
+           "Делайн", "Delain"]   # так Whisper слышит «Билайн»; delain.ru → Билайн
 domains = ["beeline.ru"]
 
 # ── Русал, Базел, Эн+, ГАЗ ───────────────────────────────────────────────────────
