@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/vjiastelin/ai-stt/compare/whisper-api-v0.5.0...whisper-api-v0.6.0) (2026-10-02)
+
+
+### Features
+
+* **whisper-api:** fetch the model with timeouts, retries, a deadline and progress ([#39](https://github.com/vjiastelin/ai-stt/issues/39)) ([aa6d042](https://github.com/vjiastelin/ai-stt/commit/aa6d04269fa74e8df6f737bd8b4f1100553e08f3))
+
 ## [0.5.0](https://github.com/vjiastelin/ai-stt/compare/whisper-api-v0.4.1...whisper-api-v0.5.0) (2026-09-30)
 
 
