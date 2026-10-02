@@ -29,7 +29,8 @@ Two services:
   the current table: [`config/email-routing.toml`](config/email-routing.toml)):
   file-name rules first, then client routes by the e-mail domain (subdomains
   included, most specific wins) or — as a fallback — the company name recognized
-  in the summary, then a known domain spelled out in the transcript (when the
+  in the summary (or the name of an unknown domain matching a client alias:
+  `delain.ru` → «Delain», how Whisper hears «Билайн»), then a known domain spelled out in the transcript (when the
   summary lost the address — Whisper sometimes glues it into one word, e.g.
   `annasobakabayer.com`), then the file's `default`. A domain or company listed in two
   routes stops startup. Helm: `--set-file emailRouting=config/email-routing.toml`

@@ -220,6 +220,20 @@ def _route_for_domain(routing: Routing, domain: str) -> ClientRoute | None:
     return best
 
 
+def _route_for_company(routing: Routing, name: str) -> ClientRoute | None:
+    """Route of a company name — whole words, the longest alias wins («Дельта Лизинг» over «Дельта»)."""
+    company = normalize_company(name)
+    if not company:
+        return None
+    padded = f" {company} "
+    best, best_len = None, 0
+    for route in routing.client_routes:
+        for c in route.companies:
+            if f" {c} " in padded and len(c) > best_len:
+                best, best_len = route, len(c)
+    return best
+
+
 def _route_in_transcript(routing: Routing, text: str) -> ClientRoute | None:
     """Route of an address spelled in `text` (a@x5.ru, annasobakabayer.com → bayer.com).
 
@@ -247,8 +261,9 @@ def match_client(
 ) -> tuple[ClientRoute | None, str]:
     """(route, "domain" | "company" | "transcript") for the client, (None, "") if none.
 
-    Most specific domain match in the summary first, then a company-name match,
-    then a client's address spelled out in the transcript.
+    Most specific domain match in the summary first, then a company-name match
+    (the «Компания:» line, else the name of an unknown domain: delain.ru →
+    alias «Delain»), then a client's address spelled out in the transcript.
     """
     if not routing.client_routes or not (summary or transcript):
         return None, ""
@@ -257,17 +272,16 @@ def match_client(
         route = _route_for_domain(routing, domain)
         if route is not None:
             return route, "domain"
-    company = normalize_company(client_company(summary))
-    if company:
-        # whole-word match; the longest alias wins («Дельта Лизинг» over «Дельта»)
-        padded = f" {company} "
-        best, best_len = None, 0
-        for route in routing.client_routes:
-            for c in route.companies:
-                if f" {c} " in padded and len(c) > best_len:
-                    best, best_len = route, len(c)
-        if best is not None:
-            return best, "company"
+    route = _route_for_company(routing, client_company(summary))
+    if route is not None:
+        return route, "company"
+    if domain:
+        # an unknown domain whose name is a client's alias: Whisper heard «Билайн»
+        # as «делайн» → delain.ru, listed as an alias of Билайн
+        labels = domain.split(".")
+        route = _route_for_company(routing, labels[-2] if len(labels) >= 2 else "")
+        if route is not None:
+            return route, "company"
     route = _route_in_transcript(routing, transcript)
     if route is not None:
         return route, "transcript"
