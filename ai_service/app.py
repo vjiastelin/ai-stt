@@ -45,7 +45,7 @@ class JobStatusResponse(BaseModel):
     created_at: str
     updated_at: str
     route: str = Field("", description="Team the delivered result was attributed to")
-    route_by: str = Field("", description="file / domain / company / default; empty until delivered")
+    route_by: str = Field("", description="file / domain / company / transcript / default; empty until delivered")
 
 
 JobState = Literal["queued", "processing", "delivering", "done", "failed"]
@@ -76,12 +76,15 @@ class UnmatchedReport(BaseModel):
     checked: int = Field(description="Processed jobs with a summary in the window")
     unmatched: int = Field(description="Of those, routed to the default mailbox")
     unrecognized: int = Field(description="Of the unmatched, with neither company nor domain")
+    unrecognized_examples: list[str] = Field(
+        default_factory=list, description="Up to 10 CallRecordIds of the unrecognized, newest first"
+    )
     clients: list[UnmatchedClient] = Field(description="Unmatched clients, most calls first")
 
 
 class RouteInfo(BaseModel):
     route: str = Field(description="Team (route name) the call belongs to; empty = not recognized")
-    by: Literal["file", "domain", "company", "default"]
+    by: Literal["file", "domain", "company", "transcript", "default"]
     company: str = Field(description="«Компания:» as recognized in the summary")
     domain: str = Field(description="Domain of the client's address in the summary")
     email_to: list[str] = Field(description="Recipients of the result e-mail (when email is on)")
@@ -120,12 +123,13 @@ class DeliveryResponse(BaseModel):
 class PreviewRequest(BaseModel):
     CallRecordUrl: str = Field("", description="Recording path; only its file name is used (file rules)")
     Summary: str = Field(min_length=1, description="Summary text with «Компания:» / «Почта:» lines")
+    FullText: str = Field("", description="Transcript; known domains in it are the last-resort rule")
 
 
 class StatsRoute(BaseModel):
     route: str = Field(description="Team (route name); «не опознан» for the default mailbox")
     count: int
-    by: dict[str, int] = Field(description="How the calls were attributed: file / domain / company / default")
+    by: dict[str, int] = Field(description="How the calls were attributed: file / domain / company / transcript / default")
     email_to: list[str] = Field(description="Mailboxes these results were e-mailed to")
 
 
@@ -258,13 +262,16 @@ def create_app(cfg: ServiceConfig, store: JobStore) -> FastAPI:
         jobs = store.list_summaries_since(since)
         groups: dict[tuple[str, str], dict] = {}
         unmatched = unrecognized = 0
+        unrecognized_examples: list[str] = []
         for job in jobs:
-            decision = mailer.route_message(cfg, job.call_record_url, job.summary)
+            decision = mailer.route_message(cfg, job.call_record_url, job.summary, job.full_text)
             if decision.by != "default":
                 continue
             unmatched += 1
             if not decision.company and not decision.domain:
                 unrecognized += 1
+                unrecognized_examples.insert(0, job.call_record_id)
+                del unrecognized_examples[10:]
                 continue
             key = (normalize_company(decision.company), decision.domain)
             entry = groups.setdefault(key, {"company": decision.company, "domain": decision.domain,
@@ -276,6 +283,7 @@ def create_app(cfg: ServiceConfig, store: JobStore) -> FastAPI:
         clients = sorted(groups.values(), key=lambda e: (-e["count"], e["company"], e["domain"]))
         return UnmatchedReport(
             days=days, checked=len(jobs), unmatched=unmatched, unrecognized=unrecognized,
+            unrecognized_examples=unrecognized_examples,
             clients=[UnmatchedClient(**e) for e in clients[:limit]],
         )
 
@@ -309,7 +317,8 @@ def create_app(cfg: ServiceConfig, store: JobStore) -> FastAPI:
         summary="Dry run: which team / mailbox a summary would be routed to",
     )
     def routing_preview(payload: PreviewRequest):
-        decision = mailer.route_message(cfg, payload.CallRecordUrl.strip(), payload.Summary)
+        decision = mailer.route_message(cfg, payload.CallRecordUrl.strip(), payload.Summary,
+                                        payload.FullText)
         return _route_info(decision, cfg.email_enabled)
 
     @app.get(
@@ -335,7 +344,8 @@ def create_app(cfg: ServiceConfig, store: JobStore) -> FastAPI:
         current = bpm = email = None
         if processed and not is_error:
             current = _route_info(
-                mailer.route_message(cfg, job.call_record_url, summary), cfg.email_enabled
+                mailer.route_message(cfg, job.call_record_url, summary, full_text),
+                cfg.email_enabled,
             )
         if processed and cfg.bpm_enabled:
             bpm = BpmDelivery(

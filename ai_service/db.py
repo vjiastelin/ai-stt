@@ -63,7 +63,7 @@ class Job:
     # current result, so a retry resends only to the channels that failed
     delivered_to: str = ""
     route: str = ""
-    route_by: str = ""        # file | domain | company | default; "" = not routed yet
+    route_by: str = ""        # file | domain | company | transcript | default; "" = not routed yet
     emailed_to: str = ""      # comma-separated recipients of the result e-mail
     routed_at: str = ""
 

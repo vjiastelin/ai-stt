@@ -32,18 +32,21 @@ def phone_from_url(call_record_url: str) -> str:
 @dataclass(frozen=True)
 class RoutingDecision:
     to: tuple[str, ...]
-    by: str        # file | domain | company | default
+    by: str        # file | domain | company | transcript | default
     company: str   # «Компания:» as recognized ("" if none)
     domain: str    # domain of the client's address ("" if none)
     route: str = ""  # team label: the route's / file rule's name, "" for default
 
 
-def route_message(cfg: ServiceConfig, call_record_url: str, summary: str = "") -> RoutingDecision:
+def route_message(
+    cfg: ServiceConfig, call_record_url: str, summary: str = "", transcript: str = ""
+) -> RoutingDecision:
     """Recipients for a record, first rule that applies:
 
     1. file-name routes (EMAIL_ROUTES, then the routing file's [[file_route]]);
     2. client routes from the routing file — the client's e-mail domain, then
-       company name, as recognized in the summary;
+       company name, as recognized in the summary, then a known domain spelled
+       out in the transcript (when the summary lost the address);
     3. the routing file's `default`, else EMAIL_TO.
     """
     company, domain = client_company(summary), client_email_domain(summary)
@@ -53,16 +56,16 @@ def route_message(cfg: ServiceConfig, call_record_url: str, summary: str = "") -
         for pattern, recipients in cfg.email_routes:
             if fnmatch.fnmatchcase(name, pattern):
                 return RoutingDecision(recipients, "file", company, domain, names.get(pattern, pattern))
-    route, by = match_client(cfg.email_routing, summary)
+    route, by = match_client(cfg.email_routing, summary, transcript)
     if route is not None:
         return RoutingDecision(route.to, by, company, domain, route.name)
     return RoutingDecision(cfg.email_routing.default or cfg.email_to, "default", company, domain)
 
 
 def recipients_for(
-    cfg: ServiceConfig, call_record_url: str, summary: str = ""
+    cfg: ServiceConfig, call_record_url: str, summary: str = "", transcript: str = ""
 ) -> tuple[str, ...]:
-    return route_message(cfg, call_record_url, summary).to
+    return route_message(cfg, call_record_url, summary, transcript).to
 
 
 def _source_lines(call_record_url: str) -> str:
@@ -86,7 +89,7 @@ def build_message(
 ) -> EmailMessage:
     msg = EmailMessage()
     msg["From"] = cfg.email_from
-    msg["To"] = ", ".join(recipients_for(cfg, call_record_url, summary))
+    msg["To"] = ", ".join(recipients_for(cfg, call_record_url, summary, full_text))
     if error:
         msg["Subject"] = f"Ошибка транскрибации звонка {call_record_id}"
         msg.set_content(
@@ -145,7 +148,7 @@ def deliver(
         raise InfrastructureError(f"email delivery failed: {exc}") from exc
     if not error:
         # result mails only: failure mails carry no summary and would always count as default
-        decision = route_message(cfg, call_record_url, summary)
+        decision = route_message(cfg, call_record_url, summary, full_text)
         metrics.EMAIL_ROUTED.labels(by=decision.by, mailbox=",".join(decision.to)).inc()
         if decision.by == "default":
             logger.info(

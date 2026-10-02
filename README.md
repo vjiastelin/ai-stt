@@ -29,7 +29,9 @@ Two services:
   the current table: [`config/email-routing.toml`](config/email-routing.toml)):
   file-name rules first, then client routes by the e-mail domain (subdomains
   included, most specific wins) or — as a fallback — the company name recognized
-  in the summary, then the file's `default`. A domain or company listed in two
+  in the summary, then a known domain spelled out in the transcript (when the
+  summary lost the address — Whisper sometimes glues it into one word, e.g.
+  `annasobakabayer.com`), then the file's `default`. A domain or company listed in two
   routes stops startup. Helm: `--set-file emailRouting=config/email-routing.toml`
   renders it into a ConfigMap and sets `EMAIL_ROUTING_FILE`.
   **Bucket scanner (optional):** with `S3_SCAN_URL=s3://bucket/prefix/` the
@@ -45,7 +47,8 @@ Two services:
   `GET /jobs/{CallRecordId}/result` (the `Summary` and `FullText`).
   `GET /routing/unmatched?days=30` lists clients (company + e-mail domain) whose
   mail went to the default mailbox, most calls first — candidates for the routing
-  table (summaries are re-routed with the current table, so added clients drop out).
+  table (summaries are re-routed with the current table, so added clients drop out);
+  `unrecognized_examples` lists the calls where neither was recognized.
   `GET /routing/stats?days=30` — delivered results per team (route) and rule, as
   recorded at delivery, for any channel (BPM-only setups too), with the mailboxes
   e-mails went to. `GET /jobs/{CallRecordId}/delivery` — what was / would be sent:
@@ -157,7 +160,7 @@ Recipients are chosen per record from [`config/email-routing.toml`](config/email
 - To see who is missing from the table: `GET /routing/unmatched?days=30`; every
   result mail sent to the default mailbox is also logged as
   `email routed to default: id=… company=… domain=…`, and
-  `ai_service_email_routed_total{by="file|domain|company|default"}` counts mails
+  `ai_service_email_routed_total{by="file|domain|company|transcript|default"}` counts mails
   per rule.
 - A broken table (bad TOML, unknown key, invalid domain/address, a domain or
   company listed twice) stops startup with the offending entry in the log; the

@@ -195,12 +195,43 @@ def _field(summary: str, label: str) -> str | None:
     return None
 
 
+# Whisper sometimes writes a dictated address as one Latin word with the "@"
+# spelled inside: mariasobachkax5.ru, annasobakabayer.com
+_GLUED_EMAIL = re.compile(
+    r"[a-z0-9._+-]+?sobac?h?ka[-_.]?([a-z0-9-]+(?:\.[a-z0-9-]+)+)", re.IGNORECASE
+)
+
+
 def client_email_domain(summary: str) -> str:
     """Domain of the client's address: the «Почта:» line, else the first address in the text."""
     line = _field(summary, "Почта")
     text = summary if line is None else line  # «Почта: не указано» → no address, don't look further
-    match = _EMAIL.search(text)
+    match = _EMAIL.search(text) or _GLUED_EMAIL.search(text)
     return match.group(1).lower() if match else ""
+
+
+def _route_for_domain(routing: Routing, domain: str) -> ClientRoute | None:
+    """Most specific route whose domain is `domain` or its parent."""
+    best, best_len = None, 0
+    for route in routing.client_routes:
+        for d in route.domains:
+            if (domain == d or domain.endswith("." + d)) and len(d) > best_len:
+                best, best_len = route, len(d)
+    return best
+
+
+def _route_in_transcript(routing: Routing, text: str) -> ClientRoute | None:
+    """Route of an address spelled in `text` (a@x5.ru, annasobakabayer.com → bayer.com).
+
+    A last resort for addresses the summary lost: a client's domain written out
+    in the transcript is strong evidence even when the summary says «не указано».
+    """
+    for regex in (_EMAIL, _GLUED_EMAIL):
+        for match in regex.finditer(text):
+            route = _route_for_domain(routing, match.group(1).lower())
+            if route is not None:
+                return route
+    return None
 
 
 _NOT_GIVEN = normalize_company("не указано")
@@ -211,22 +242,21 @@ def client_company(summary: str) -> str:
     return "" if normalize_company(value) in ("", _NOT_GIVEN) else value
 
 
-def match_client(routing: Routing, summary: str) -> tuple[ClientRoute | None, str]:
-    """(route, "domain" | "company") for the client in the summary, (None, "") if none.
+def match_client(
+    routing: Routing, summary: str, transcript: str = ""
+) -> tuple[ClientRoute | None, str]:
+    """(route, "domain" | "company" | "transcript") for the client, (None, "") if none.
 
-    Most specific domain match first, then a company-name match.
+    Most specific domain match in the summary first, then a company-name match,
+    then a client's address spelled out in the transcript.
     """
-    if not summary or not routing.client_routes:
+    if not routing.client_routes or not (summary or transcript):
         return None, ""
     domain = client_email_domain(summary)
     if domain:
-        best, best_len = None, 0
-        for route in routing.client_routes:
-            for d in route.domains:
-                if (domain == d or domain.endswith("." + d)) and len(d) > best_len:
-                    best, best_len = route, len(d)
-        if best is not None:
-            return best, "domain"
+        route = _route_for_domain(routing, domain)
+        if route is not None:
+            return route, "domain"
     company = normalize_company(client_company(summary))
     if company:
         # whole-word match; the longest alias wins («Дельта Лизинг» over «Дельта»)
@@ -238,8 +268,11 @@ def match_client(routing: Routing, summary: str) -> tuple[ClientRoute | None, st
                     best, best_len = route, len(c)
         if best is not None:
             return best, "company"
+    route = _route_in_transcript(routing, transcript)
+    if route is not None:
+        return route, "transcript"
     return None, ""
 
 
-def route_for_client(routing: Routing, summary: str) -> ClientRoute | None:
-    return match_client(routing, summary)[0]
+def route_for_client(routing: Routing, summary: str, transcript: str = "") -> ClientRoute | None:
+    return match_client(routing, summary, transcript)[0]

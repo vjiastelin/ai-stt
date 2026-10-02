@@ -38,6 +38,16 @@ def test_route_message_reports_the_rule(cfg, url, company, email, by):
     assert mailer.route_message(cfg, url, summary(company, email)).by == by
 
 
+def test_route_message_falls_back_to_the_transcript(cfg):
+    decision = mailer.route_message(cfg, "s3://c/IVR_1.wav", summary(),
+                                    "[00:00:00] почта annasobakabayer.ru")
+    assert (decision.by, decision.to) == ("transcript", ("time001@aeroclub.team",))
+    # the result mail goes to the same team
+    msg = mailer.build_message(cfg, "id-1", summary(), "[00:00:00] почта annasobakabayer.ru",
+                               call_record_url="s3://c/IVR_1.wav")
+    assert msg["To"] == "time001@aeroclub.team"
+
+
 def _counter(by):
     """Sum of ai_service_email_routed_total{by=…} over every mailbox."""
     return sum(
@@ -83,15 +93,18 @@ def test_unmatched_report(cfg, tmp_path):
         "r2": summary("ООО «Ромашка»", "b@romashka.ru"),      # same client, other spelling
         "x": summary("не указано", "c@xmail.ru"),
         "nobody": summary(),
+        "glued": summary(),  # address only in the transcript → routed, not unmatched
     }
     for job_id, text in jobs.items():
         url = "s3://c/GATE_1.wav" if job_id == "gate" else f"s3://c/IVR_{job_id}.wav"
         store.enqueue(job_id, url)
-        store.set_result(job_id, "[00:00:00] …", text)
+        full_text = "[00:00:00] почта annasobakabayer.ru" if job_id == "glued" else "[00:00:00] …"
+        store.set_result(job_id, full_text, text)
     store.enqueue("queued", "s3://c/IVR_q.wav")  # no summary yet → not checked
 
     body = TestClient(create_app(cfg, store)).get("/routing/unmatched?days=7").json()
-    assert (body["days"], body["checked"], body["unmatched"], body["unrecognized"]) == (7, 6, 4, 1)
+    assert (body["days"], body["checked"], body["unmatched"], body["unrecognized"]) == (7, 7, 4, 1)
+    assert body["unrecognized_examples"] == ["nobody"]
     assert [(c["company"], c["domain"], c["count"]) for c in body["clients"]] == [
         ("Ромашка", "romashka.ru", 2),   # grouped by normalized company + domain
         ("", "xmail.ru", 1),

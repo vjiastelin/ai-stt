@@ -36,6 +36,17 @@ def test_summary_fields():
     assert client_email_domain("Почта: не указано\nСуть: переслать boss@sibur.ru") == ""
 
 
+@pytest.mark.parametrize("email,domain", [
+    # Whisper glued the dictation into one word, the LLM copied it as is
+    ("mariasobachkax5.ru (продиктовано: «mariasobachkax5.ru»)", "x5.ru"),
+    ("annasobakabayer.com", "bayer.com"),
+    ("ivan.petrov-sobacka-lenta.com", "lenta.com"),
+    ("kristina.lukyanova.ru (проверить)", ""),  # no «собака» at all: nothing to split
+])
+def test_glued_address_domain(email, domain):
+    assert client_email_domain(summary(email=email)) == domain
+
+
 ROUTING = parse_routing({
     "default": "time017@aeroclub.team",
     "route": [
@@ -142,6 +153,33 @@ def repo_routing():
 def test_committed_table(repo_routing, company, email, to):
     route = route_for_client(repo_routing, summary(company, email))
     assert (route.to[0] if route else repo_routing.default[0]) == to
+
+
+# operators' test calls (2026-10-02): the address lost by the summary
+@pytest.mark.parametrize("email,transcript,to", [
+    ("mariasobachkax5.ru (продиктовано: «mariasobachkax5.ru»)",
+     "[00:00:03] Мария, почта mariasobachkax5.ru.", "time005@aeroclub.team"),
+    ("не указано", "[00:00:00] Меня зовут Анна, почта annasobakabayer.com. Смотрю, на какую почту "
+     "уйдёт эта заявка.", "time001@aeroclub.team"),
+    ("не указано", "[00:00:00] Это Пётр, почта пётрсобака.русал.ком.", "time017@aeroclub.team"),
+])
+def test_committed_table_recovers_lost_address(repo_routing, email, transcript, to):
+    route = route_for_client(repo_routing, summary(email=email), transcript)
+    assert (route.to[0] if route else repo_routing.default[0]) == to
+
+
+def test_transcript_domain_is_the_last_resort():
+    # summary domain and company win; transcript only when both found nothing
+    t = "почта ivan-sobaka-lenta.com"
+    assert route_for_client(ROUTING, summary("Дельта Лизинг"), t).to == ("time006@aeroclub.team",)
+    assert route_for_client(ROUTING, summary(email="a@deltaleasing.ru"), t).to == ("time006@aeroclub.team",)
+    assert route_for_client(ROUTING, summary(), t).to == ("time007@aeroclub.team",)
+    assert route_for_client(ROUTING, summary(), "почта ivan собака лента точка ком") is None
+    # most specific domain wins; a lookalike word without «собака» is not an address
+    assert route_for_client(ROUTING, summary(), "petrsobakaes.irkutskenergo.ru").to == (
+        "time009@aeroclub.team",)
+    assert route_for_client(ROUTING, summary(), "почта ivan@notlenta.com, notlenta.com") is None
+    assert route_for_client(ROUTING, "", t).to == ("time007@aeroclub.team",)
 
 
 def test_committed_file_routes(repo_routing):
