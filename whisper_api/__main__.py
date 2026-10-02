@@ -1,4 +1,5 @@
 import logging
+import os
 
 import uvicorn
 
@@ -12,12 +13,29 @@ def main() -> None:
         level=cfg.log_level,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # one INFO line per hub request
 
-    def engine_factory():
+    # per-request read timeout of the hub client: a dead connection is retried
+    # instead of hanging forever (read when huggingface_hub is first imported)
+    os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "60")
+    # plain HTTP instead of Xet: resumable .incomplete files whose growth the progress
+    # log can see (Xet writes the file only at the end, and stalled on flaky hosts);
+    # set HF_HUB_DISABLE_XET=0 to use Xet again
+    os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+
+    def engine_factory(status):
+        from whisper_api.download import ensure_model
         from whisper_api.engine import Engine
 
-        return Engine(
+        model_path = ensure_model(
             cfg.model,
+            retries=cfg.download_retries,
+            deadline_seconds=cfg.download_timeout_seconds,
+            status=status,
+        )
+        status("loading model into memory")
+        return Engine(
+            model_path,
             cfg.device,
             cfg.compute_type,
             vad_filter=cfg.vad_filter,

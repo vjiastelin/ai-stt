@@ -108,7 +108,13 @@ locally as well, leave `WHISPER_API_URL` unset and enable the profile:
     docker compose --profile local-whisper up --build
 
 ai-service then waits for whisper-api to become healthy (Compose >= 2.20).
-First start downloads the Whisper model into the `model-cache` volume.
+First start downloads the Whisper model into the `model-cache` volume. The
+download runs before the model is loaded, with a per-request timeout, retries and
+an overall deadline (`WHISPER_DOWNLOAD_RETRIES`, `WHISPER_DOWNLOAD_TIMEOUT_SECONDS`);
+progress (MB so far, MB/s) is logged and shown in the `/health` 503 detail, and past
+the deadline the process exits so a restart resumes the partial files. It uses
+plain HTTP by default (`HF_HUB_DISABLE_XET=1`); with a filled cache set
+`HF_HUB_OFFLINE=1` to start without contacting the hub.
 On CPU-only hosts, set `DEVICE=cpu` in `.env` (the default is `cuda`); on GPU
 hosts uncomment the `deploy:` block of `whisper-api` in `docker-compose.yml`.
 A `failed` job (see `GET /jobs/{id}`) is retried by re-POSTing

@@ -64,3 +64,12 @@ def test_ssl_overrides():
     cfg = load_config({"SSL_CERTFILE": "/certs/c.pem", "SSL_KEYFILE": "/certs/k.pem"})
     assert cfg.ssl_certfile == "/certs/c.pem"
     assert cfg.ssl_keyfile == "/certs/k.pem"
+
+
+def test_download_settings():
+    from whisper_api.config import load_config
+
+    cfg = load_config({})
+    assert (cfg.download_retries, cfg.download_timeout_seconds) == (5, 1800)
+    cfg = load_config({"WHISPER_DOWNLOAD_RETRIES": "0", "WHISPER_DOWNLOAD_TIMEOUT_SECONDS": "900"})
+    assert (cfg.download_retries, cfg.download_timeout_seconds) == (1, 900)  # at least one attempt

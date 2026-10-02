@@ -1,5 +1,6 @@
 """FastAPI app: OpenAI-compatible transcription endpoint (spec §4)."""
 import logging
+import os
 import tempfile
 import threading
 from collections.abc import Callable
@@ -13,6 +14,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from whisper_api.config import ApiConfig
+from whisper_api.download import DownloadError
 from whisper_api.engine import InvalidAudioError
 
 logger = logging.getLogger(__name__)
@@ -42,12 +44,27 @@ class ErrorResponse(BaseModel):
     detail: str
 
 
-def create_app(cfg: ApiConfig, engine_factory: Callable | None) -> FastAPI:
+def create_app(
+    cfg: ApiConfig,
+    engine_factory: Callable | None,
+    on_fatal: Callable[[], None] = lambda: os._exit(1),
+) -> FastAPI:
+    """`engine_factory(status)` builds the engine; `status(text)` reports load progress."""
+
+    def _status(text: str) -> None:
+        app.state.load_status = text
+
     def _load_engine(app: FastAPI) -> None:
         logger.info("loading model %s on %s (%s)", cfg.model, cfg.device, cfg.compute_type)
         try:
-            app.state.engine = engine_factory()
+            app.state.engine = engine_factory(_status)
             logger.info("model loaded")
+        except DownloadError as exc:
+            # a stuck download can't be cancelled in-process: exit so the container
+            # restarts and the hub resumes the partial files
+            logger.error("giving up on the model download, exiting: %s", exc)
+            app.state.load_error = True
+            on_fatal()
         except Exception:
             logger.exception("model loading failed")
             app.state.load_error = True
@@ -61,6 +78,7 @@ def create_app(cfg: ApiConfig, engine_factory: Callable | None) -> FastAPI:
     app = FastAPI(title="whisper-api", lifespan=lifespan)
     app.state.engine = None
     app.state.load_error = False
+    app.state.load_status = "model loading"
 
     def _check_auth(authorization: str | None) -> None:
         if cfg.api_key and authorization != f"Bearer {cfg.api_key}":
@@ -70,7 +88,7 @@ def create_app(cfg: ApiConfig, engine_factory: Callable | None) -> FastAPI:
         if app.state.load_error:
             raise HTTPException(status_code=500, detail="model failed to load")
         if app.state.engine is None:
-            raise HTTPException(status_code=503, detail="model loading")
+            raise HTTPException(status_code=503, detail=app.state.load_status)
         return app.state.engine
 
     @app.get(
