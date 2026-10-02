@@ -50,7 +50,7 @@ STAGE_ERRORS = Counter(
 EMAIL_ROUTED = Counter(
     "ai_service_email_routed_total",
     "Result e-mails sent, by the rule that picked the recipients and the mailbox",
-    ["by", "mailbox"],  # file | domain | company | default; comma-joined recipients
+    ["by", "mailbox"],  # file | domain | company | transcript | default; comma-joined recipients
 )
 ROUTED = Counter(
     "ai_service_routed_total",

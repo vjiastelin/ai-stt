@@ -171,7 +171,9 @@ class Worker:
         else:
             # which team the call belongs to — for every channel, BPM included; the
             # e-mail recipients are those mailer.deliver used (same rules, same input)
-            decision = mailer.route_message(self.cfg, job.call_record_url, job.summary or "")
+            decision = mailer.route_message(
+                self.cfg, job.call_record_url, job.summary or "", job.full_text or ""
+            )
             emailed_to = ",".join(decision.to) if self.cfg.email_enabled else ""
             self.store.set_routing(job.call_record_id, decision.route, decision.by, emailed_to)
             metrics.ROUTED.labels(route=decision.route or "default", by=decision.by).inc()

@@ -115,6 +115,9 @@ def test_preview(email_cfg, tmp_path):
     gate = client.post("/routing/preview",
                        json={"CallRecordUrl": "s3://c/GATE_1.wav", "Summary": summary()}).json()
     assert (gate["route"], gate["by"], gate["email_to"]) == ("Gate", "file", ["info@go.gate.ru"])
+    glued = client.post("/routing/preview", json={
+        "Summary": summary(), "FullText": "[00:00:00] почта annasobakabayer.ru"}).json()
+    assert (glued["route"], glued["by"]) == ("Альянс", "transcript")
     assert client.post("/routing/preview", json={"Summary": ""}).status_code == 400
 
 
