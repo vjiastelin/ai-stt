@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.2](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.10.1...ai-service-v0.10.2) (2026-10-07)
+
+
+### Bug Fixes
+
+* «Делайн» alias for Билайн; unknown domain's name matches client aliases ([#43](https://github.com/vjiastelin/ai-stt/issues/43)) ([d13ab29](https://github.com/vjiastelin/ai-stt/commit/d13ab29a14c7f778e39ea2abc51d2e0d1d35b7c5))
+
 ## [0.10.1](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.10.0...ai-service-v0.10.1) (2026-10-02)
 
 
