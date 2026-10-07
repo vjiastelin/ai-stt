@@ -162,6 +162,8 @@ def test_committed_table(repo_routing, company, email, to):
     ("не указано", "[00:00:00] Меня зовут Анна, почта annasobakabayer.com. Смотрю, на какую почту "
      "уйдёт эта заявка.", "time001@aeroclub.team"),
     ("не указано", "[00:00:00] Это Пётр, почта пётрсобака.русал.ком.", "time017@aeroclub.team"),
+    # «Билайн» heard as «делайн»: the unknown domain's name is an alias
+    ("ivan@delain.ru (продиктовано: «иван собака делайн точка ру»)", "", "time002@aeroclub.team"),
 ])
 def test_committed_table_recovers_lost_address(repo_routing, email, transcript, to):
     route = route_for_client(repo_routing, summary(email=email), transcript)
@@ -180,6 +182,22 @@ def test_transcript_domain_is_the_last_resort():
         "time009@aeroclub.team",)
     assert route_for_client(ROUTING, summary(), "почта ivan@notlenta.com, notlenta.com") is None
     assert route_for_client(ROUTING, "", t).to == ("time007@aeroclub.team",)
+
+
+def test_unknown_domain_name_matches_a_company_alias():
+    routing = parse_routing({"route": [
+        {"to": "time002@aeroclub.team", "companies": ["Билайн", "Делайн", "Delain"],
+         "domains": ["beeline.ru"]},
+        {"to": "time006@aeroclub.team", "companies": ["Дельта Лизинг"]},
+    ]})
+    assert route_for_client(routing, summary(email="ivan@delain.ru")).to == ("time002@aeroclub.team",)
+    assert route_for_client(routing, summary(email="ivan@mail.delain.ru")).to == (
+        "time002@aeroclub.team",)
+    assert route_for_client(routing, summary(email="ivan@gmail.com")) is None
+    assert route_for_client(routing, summary(email="ivan@delainx.ru")) is None
+    # the «Компания:» line still beats the domain's name
+    assert route_for_client(routing, summary("Дельта Лизинг", "ivan@delain.ru")).to == (
+        "time006@aeroclub.team",)
 
 
 def test_committed_file_routes(repo_routing):
