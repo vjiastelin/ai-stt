@@ -34,6 +34,10 @@ def main() -> None:
             status=status,
         )
         status("loading model into memory")
+        if cfg.device == "cuda":
+            from whisper_api.gpu import describe_gpu
+
+            logging.getLogger(__name__).info("GPU: %s", describe_gpu())
         return Engine(
             model_path,
             cfg.device,
