@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/vjiastelin/ai-stt/compare/whisper-api-v0.6.0...whisper-api-v0.6.1) (2026-10-19)
+
+
+### Bug Fixes
+
+* **whisper-api:** log the GPU model and NVIDIA driver before loading the model ([#46](https://github.com/vjiastelin/ai-stt/issues/46)) ([e2b2e9a](https://github.com/vjiastelin/ai-stt/commit/e2b2e9a0a62f66e8e4af2f8c6635a862b5b89d07))
+
 ## [0.6.0](https://github.com/vjiastelin/ai-stt/compare/whisper-api-v0.5.0...whisper-api-v0.6.0) (2026-10-02)
 
 
