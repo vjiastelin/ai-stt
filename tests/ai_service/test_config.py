@@ -72,6 +72,7 @@ def test_email_only():
     assert cfg.ews_url == "https://mail.example.kz/EWS/Exchange.asmx"
     assert (cfg.ews_username, cfg.ews_password) == ("EXAMPLE\\stt", "pw")
     assert cfg.ews_auth_type == ""  # autodetect
+    assert cfg.ews_access_type == "delegate"
     assert cfg.ews_verify_ssl is True
     assert cfg.ews_timeout_seconds == 60
     assert cfg.ews_save_copy is False
@@ -112,6 +113,12 @@ def test_ews_options():
                        "EWS_TIMEOUT_SECONDS": "15", "EWS_SAVE_COPY": "true"})
     assert (cfg.ews_auth_type, cfg.ews_verify_ssl, cfg.ews_timeout_seconds, cfg.ews_save_copy) == (
         "ntlm", False, 15, True)
+
+
+def test_ews_access_type():
+    assert load_config({**REQUIRED, **EMAIL, "EWS_ACCESS_TYPE": "Impersonation"}).ews_access_type == "impersonation"
+    with pytest.raises(ConfigError, match="EWS_ACCESS_TYPE"):
+        load_config({**REQUIRED, **EMAIL, "EWS_ACCESS_TYPE": "owner"})
 
 
 def test_invalid_ews_auth_type_raises():

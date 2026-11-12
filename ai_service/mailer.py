@@ -12,7 +12,7 @@ from pathlib import PurePosixPath
 
 import requests
 from exchangelib import (
-    DELEGATE, Account, Body, Configuration, Credentials, FileAttachment, Mailbox, Message,
+    DELEGATE, IMPERSONATION, Account, Body, Configuration, Credentials, FileAttachment, Mailbox, Message,
 )
 from exchangelib.errors import EWSError
 from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
@@ -148,12 +148,16 @@ def _account(cfg: ServiceConfig) -> Account:
         auth_type=_AUTH_TYPES[cfg.ews_auth_type],
         # default FailFast retry policy: the worker owns retries and backoff
     )
-    return Account(cfg.email_from, config=config, autodiscover=False, access_type=DELEGATE)
+    access_type = IMPERSONATION if cfg.ews_access_type == "impersonation" else DELEGATE
+    return Account(cfg.email_from, config=config, autodiscover=False, access_type=access_type)
 
 
 def to_ews_message(account: Account | None, mail: Mail) -> Message:
     message = Message(
         account=account,
+        # explicit From: without it a SendOnly message goes out as the logged-in
+        # EWS_USERNAME's own mailbox; with it Exchange checks Send As on EMAIL_FROM
+        author=Mailbox(email_address=mail.sender),
         subject=mail.subject,
         body=Body(mail.body),
         to_recipients=[Mailbox(email_address=address) for address in mail.to],

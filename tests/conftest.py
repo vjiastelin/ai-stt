@@ -38,6 +38,7 @@ def service_config(tmp_path):
             ews_username="",
             ews_password="",
             ews_auth_type="",
+            ews_access_type="delegate",
             ews_verify_ssl=True,
             ews_timeout_seconds=5,
             ews_save_copy=False,

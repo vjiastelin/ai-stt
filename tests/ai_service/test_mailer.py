@@ -95,6 +95,7 @@ def test_ews_message_carries_recipients_body_and_attachment(email_config):
     mail = mailer.build_message(email_config(), "id-1", "суть", "[00:00:00] привет")
     message = mailer.to_ews_message(None, mail)
     assert message.subject == "Транскрибация звонка id-1"
+    assert message.author.email_address == "stt@example.kz"
     assert [r.email_address for r in message.to_recipients] == ["ops@example.kz", "qa@example.kz"]
     assert isinstance(message.body, Body) and "суть" in message.body
     [attachment] = message.attachments
@@ -123,6 +124,12 @@ def test_account_targets_the_sender_mailbox_on_the_endpoint(email_config, restor
     assert account.protocol.credentials.username == "EXAMPLE\\stt"
     assert BaseProtocol.TIMEOUT == 7
     assert BaseProtocol.HTTP_ADAPTER_CLS is not NoVerifyHTTPAdapter
+
+
+def test_account_access_type(email_config, restore_protocol):
+    from exchangelib import DELEGATE, IMPERSONATION
+    assert mailer._account(email_config()).access_type == DELEGATE
+    assert mailer._account(email_config(ews_access_type="impersonation")).access_type == IMPERSONATION
 
 
 def test_account_can_skip_tls_verification(email_config, restore_protocol):

@@ -59,6 +59,9 @@ class ServiceConfig:
     ews_username: str
     ews_password: str
     ews_auth_type: str  # "" = autodetect, else one of EWS_AUTH_TYPES
+    # delegate: EWS_USERNAME acts on EMAIL_FROM with its own rights (Send As, folder access);
+    # impersonation: acts AS the mailbox owner (needs the ApplicationImpersonation role)
+    ews_access_type: str
     ews_verify_ssl: bool
     ews_timeout_seconds: int
     ews_save_copy: bool  # keep a copy of each sent mail in the mailbox's Sent Items
@@ -95,6 +98,7 @@ def _require(env: Mapping[str, str], name: str) -> str:
 
 
 EWS_AUTH_TYPES = ("ntlm", "basic", "digest")
+EWS_ACCESS_TYPES = ("delegate", "impersonation")
 _REMOVED_SMTP_VARS = (
     "SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_USERNAME", "SMTP_PASSWORD",
     "SMTP_TIMEOUT_SECONDS",
@@ -261,6 +265,11 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
             f"EWS_AUTH_TYPE must be empty (autodetect) or one of {', '.join(EWS_AUTH_TYPES)}: "
             f"{ews_auth_type!r}"
         )
+    ews_access_type = env.get("EWS_ACCESS_TYPE", "delegate").strip().lower() or "delegate"
+    if ews_access_type not in EWS_ACCESS_TYPES:
+        raise ConfigError(
+            f"EWS_ACCESS_TYPE must be one of {', '.join(EWS_ACCESS_TYPES)}: {ews_access_type!r}"
+        )
     if email_enabled:
         ews_url = _parse_ews_url(_require(env, "EWS_URL"))
         ews_username = _require(env, "EWS_USERNAME")
@@ -320,6 +329,7 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         ews_username=ews_username,
         ews_password=ews_password,
         ews_auth_type=ews_auth_type,
+        ews_access_type=ews_access_type,
         # false accepts self-signed certs of an internal Exchange (not verified!)
         ews_verify_ssl=_flag(env, "EWS_VERIFY_SSL", True),
         ews_timeout_seconds=int(env.get("EWS_TIMEOUT_SECONDS", "60")),
