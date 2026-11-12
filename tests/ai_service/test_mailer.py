@@ -1,56 +1,39 @@
-import smtplib
-
 import pytest
+import requests
+from exchangelib import Body, FileAttachment
+from exchangelib.errors import ErrorServerBusy, TransportError, UnauthorizedError
+from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
+from exchangelib.transport import NTLM
 
 from ai_service import mailer
 from ai_service.errors import InfrastructureError
 
 
-class FakeSMTP:
-    """Stands in for smtplib.SMTP / SMTP_SSL; records what the mailer did."""
+class FakeOutbox(list):
+    """Stands in for mailer.send (the EWS call); records Mail objects, or raises `fail_with`."""
 
-    instances: list["FakeSMTP"] = []
     fail_with: Exception | None = None
 
-    def __init__(self, host, port, timeout=None, context=None):
-        if FakeSMTP.fail_with is not None:
-            raise FakeSMTP.fail_with
-        self.host, self.port, self.timeout = host, port, timeout
-        self.started_tls = False
-        self.login_args = None
-        self.sent = []
-        FakeSMTP.instances.append(self)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return False
-
-    def starttls(self, context=None):
-        self.started_tls = True
-
-    def login(self, user, password):
-        self.login_args = (user, password)
-
-    def send_message(self, msg):
-        self.sent.append(msg)
+    def __call__(self, cfg, mail):
+        if self.fail_with is not None:
+            raise self.fail_with
+        self.append(mail)
 
 
 @pytest.fixture
-def fake_smtp(monkeypatch):
-    FakeSMTP.instances = []
-    FakeSMTP.fail_with = None
-    monkeypatch.setattr(mailer.smtplib, "SMTP", FakeSMTP)
-    monkeypatch.setattr(mailer.smtplib, "SMTP_SSL", FakeSMTP)
-    return FakeSMTP
+def fake_outbox(monkeypatch):
+    outbox = FakeOutbox()
+    monkeypatch.setattr(mailer, "send", outbox)
+    return outbox
 
 
 @pytest.fixture
 def email_config(service_config):
     def make(**overrides):
         base = dict(
-            smtp_host="smtp.example.kz",
+            ews_url="https://mail.example.kz/EWS/Exchange.asmx",
+            ews_username="EXAMPLE\\stt",
+            ews_password="pw",
             email_from="stt@example.kz",
             email_to=("ops@example.kz", "qa@example.kz"),
         )
@@ -63,19 +46,16 @@ def email_config(service_config):
 def test_success_message_has_summary_transcript_and_attachment(email_config):
     msg = mailer.build_message(email_config(), "id-1", "суть", "[00:00:00] привет")
 
-    assert msg["From"] == "stt@example.kz"
-    assert msg["To"] == "ops@example.kz, qa@example.kz"
-    assert msg["Subject"] == "Транскрибация звонка id-1"
-    body = msg.get_body(("plain",)).get_content()
-    assert "Краткое содержание:\nсуть" in body
-    assert "[00:00:00] привет" in body
-    [attachment] = list(msg.iter_attachments())
-    assert attachment.get_filename() == "id-1.txt"
-    assert attachment.get_content().rstrip("\n") == "[00:00:00] привет"
+    assert msg.sender == "stt@example.kz"
+    assert msg.to == ("ops@example.kz", "qa@example.kz")
+    assert msg.subject == "Транскрибация звонка id-1"
+    assert "Краткое содержание:\nсуть" in msg.body
+    assert "[00:00:00] привет" in msg.body
+    assert msg.attachments == (("id-1.txt", "[00:00:00] привет".encode("utf-8")),)
 
 
 def test_success_message_without_summary_omits_section(email_config):
-    body = mailer.build_message(email_config(), "id-1", "", "t").get_body(("plain",)).get_content()
+    body = mailer.build_message(email_config(), "id-1", "", "t").body
     assert "Краткое содержание" not in body
 
 
@@ -83,52 +63,97 @@ def test_error_message_carries_reason(email_config):
     msg = mailer.build_message(
         email_config(), "id-1", "", "", error=True, error_description="corrupt audio"
     )
-    assert msg["Subject"] == "Ошибка транскрибации звонка id-1"
-    assert "corrupt audio" in msg.get_content()
-    assert list(msg.iter_attachments()) == []
+    assert msg.subject == "Ошибка транскрибации звонка id-1"
+    assert "corrupt audio" in msg.body
+    assert msg.attachments == ()
 
 
-def test_deliver_starttls_with_login(email_config, fake_smtp):
-    cfg = email_config(smtp_username="user", smtp_password="pw")
-    mailer.deliver(cfg, "id-1", "s", "t")
-
-    [client] = fake_smtp.instances
-    assert (client.host, client.port) == ("smtp.example.kz", 587)
-    assert client.started_tls is True
-    assert client.login_args == ("user", "pw")
-    assert client.sent[0]["Subject"] == "Транскрибация звонка id-1"
-
-
-def test_deliver_plain_without_login(email_config, fake_smtp):
-    mailer.deliver(email_config(smtp_security="none", smtp_port=25), "id-1", "s", "t")
-
-    [client] = fake_smtp.instances
-    assert client.started_tls is False
-    assert client.login_args is None
-    assert len(client.sent) == 1
+def test_deliver_sends_the_built_message(email_config, fake_outbox):
+    mailer.deliver(email_config(), "id-1", "s", "t")
+    [mail] = fake_outbox
+    assert (mail.subject, mail.to) == ("Транскрибация звонка id-1", ("ops@example.kz", "qa@example.kz"))
 
 
 @pytest.mark.parametrize(
     "exc",
     [
-        ConnectionRefusedError("down"),
+        TransportError("connection refused"),
+        UnauthorizedError("bad creds"),
+        ErrorServerBusy("throttled"),
+        requests.ConnectionError("down"),
         TimeoutError("slow"),
-        smtplib.SMTPAuthenticationError(535, b"bad creds"),
     ],
 )
-def test_smtp_failures_are_infrastructure_errors(email_config, fake_smtp, exc):
-    fake_smtp.fail_with = exc
+def test_exchange_failures_are_infrastructure_errors(email_config, fake_outbox, exc):
+    fake_outbox.fail_with = exc
     with pytest.raises(InfrastructureError):
         mailer.deliver(email_config(), "id-1", "s", "t")
+    assert fake_outbox == []
+
+
+def test_ews_message_carries_recipients_body_and_attachment(email_config):
+    mail = mailer.build_message(email_config(), "id-1", "суть", "[00:00:00] привет")
+    message = mailer.to_ews_message(None, mail)
+    assert message.subject == "Транскрибация звонка id-1"
+    assert message.author.email_address == "stt@example.kz"
+    assert [r.email_address for r in message.to_recipients] == ["ops@example.kz", "qa@example.kz"]
+    assert isinstance(message.body, Body) and "суть" in message.body
+    [attachment] = message.attachments
+    assert isinstance(attachment, FileAttachment)
+    assert (attachment.name, attachment.content_type) == ("id-1.txt", "text/plain")
+    assert attachment.content.decode("utf-8") == "[00:00:00] привет"
+
+
+def test_ews_message_without_attachment_for_failures(email_config):
+    mail = mailer.build_message(email_config(), "id-1", "", "", error=True, error_description="x")
+    assert mailer.to_ews_message(None, mail).attachments == []
+
+
+@pytest.fixture
+def restore_protocol():
+    saved = BaseProtocol.TIMEOUT, BaseProtocol.HTTP_ADAPTER_CLS
+    yield
+    BaseProtocol.TIMEOUT, BaseProtocol.HTTP_ADAPTER_CLS = saved
+
+
+def test_account_targets_the_sender_mailbox_on_the_endpoint(email_config, restore_protocol):
+    account = mailer._account(email_config(ews_auth_type="ntlm", ews_timeout_seconds=7))
+    assert account.primary_smtp_address == "stt@example.kz"
+    assert account.protocol.service_endpoint == "https://mail.example.kz/EWS/Exchange.asmx"
+    assert account.protocol.auth_type == NTLM
+    assert account.protocol.credentials.username == "EXAMPLE\\stt"
+    assert BaseProtocol.TIMEOUT == 7
+    assert BaseProtocol.HTTP_ADAPTER_CLS is not NoVerifyHTTPAdapter
+
+
+def test_account_access_type(email_config, restore_protocol):
+    from exchangelib import DELEGATE, IMPERSONATION
+    assert mailer._account(email_config()).access_type == DELEGATE
+    assert mailer._account(email_config(ews_access_type="impersonation")).access_type == IMPERSONATION
+
+
+def test_account_can_skip_tls_verification(email_config, restore_protocol):
+    mailer._account(email_config(ews_verify_ssl=False))
+    assert BaseProtocol.HTTP_ADAPTER_CLS is NoVerifyHTTPAdapter
+
+
+def test_send_uses_save_copy_setting(email_config, monkeypatch):
+    calls = []
+    monkeypatch.setattr(mailer, "_account", lambda cfg: None)
+    monkeypatch.setattr(mailer.Message, "send", lambda self, save_copy: calls.append(save_copy))
+    mail = mailer.build_message(email_config(), "id-1", "s", "t")
+    mailer.send(email_config(), mail)
+    mailer.send(email_config(ews_save_copy=True), mail)
+    assert calls == [False, True]
 
 
 def test_source_file_shown_when_known(email_config):
     ok = mailer.build_message(email_config(), "id-1", "s", "t", call_record_url="s3://calls/a.mp3")
-    assert "Файл: s3://calls/a.mp3" in ok.get_body(("plain",)).get_content()
+    assert "Файл: s3://calls/a.mp3" in ok.body
     err = mailer.build_message(email_config(), "id-1", "", "", error=True,
                                error_description="boom", call_record_url="s3://calls/a.mp3")
-    assert "Файл: s3://calls/a.mp3" in err.get_content()
-    assert "Файл:" not in mailer.build_message(email_config(), "id-1", "s", "t").get_body(("plain",)).get_content()
+    assert "Файл: s3://calls/a.mp3" in err.body
+    assert "Файл:" not in mailer.build_message(email_config(), "id-1", "s", "t").body
 
 
 @pytest.mark.parametrize(
@@ -151,12 +176,12 @@ def test_phone_from_url(url, phone):
 def test_phone_shown_after_file_path(email_config):
     url = "s3://calls/IVRrecord_00000000-01dd-50cc-52ec-24dc00009d25_9019988207.wav"
     ok = mailer.build_message(email_config(), "id-1", "s", "t", call_record_url=url)
-    assert f"Файл: {url}\nТелефон: 9019988207\n" in ok.get_body(("plain",)).get_content()
+    assert f"Файл: {url}\nТелефон: 9019988207\n" in ok.body
     err = mailer.build_message(email_config(), "id-1", "", "", error=True,
                                error_description="boom", call_record_url=url)
-    assert f"Файл: {url}\nТелефон: 9019988207\n" in err.get_content()
+    assert f"Файл: {url}\nТелефон: 9019988207\n" in err.body
     plain = mailer.build_message(email_config(), "id-1", "s", "t", call_record_url="s3://c/rec.wav")
-    assert "Телефон" not in plain.get_body(("plain",)).get_content()
+    assert "Телефон" not in plain.body
 
 
 ROUTES = (
@@ -180,7 +205,7 @@ ROUTES = (
 def test_recipients_routed_by_file_name(email_config, url, to):
     cfg = email_config(email_to=("time017@aeroclub.team",), email_routes=ROUTES)
     assert mailer.recipients_for(cfg, url) == (to,)
-    assert mailer.build_message(cfg, "id-1", "s", "t", call_record_url=url)["To"] == to
+    assert mailer.build_message(cfg, "id-1", "s", "t", call_record_url=url).to == (to,)
 
 
 def test_first_matching_route_wins_and_failures_are_routed_too(email_config):
@@ -190,11 +215,11 @@ def test_first_matching_route_wins_and_failures_are_routed_too(email_config):
     assert mailer.recipients_for(cfg, url) == ("a@x.ru", "b@x.ru")
     err = mailer.build_message(cfg, "id-1", "", "", error=True, error_description="boom",
                                call_record_url=url)
-    assert err["To"] == "a@x.ru, b@x.ru"
+    assert err.to == ("a@x.ru", "b@x.ru")
 
 
-def test_routed_message_is_sent_to_route_recipients(email_config, fake_smtp):
+def test_routed_message_is_sent_to_route_recipients(email_config, fake_outbox):
     cfg = email_config(email_to=("time017@aeroclub.team",), email_routes=ROUTES)
     mailer.deliver(cfg, "id-1", "s", "t", call_record_url="s3://c/GATE_IVRrecord_1_9019988207.wav")
-    [client] = fake_smtp.instances
-    assert client.sent[0]["To"] == "info@go.gate.ru"
+    [mail] = fake_outbox
+    assert mail.to == ("info@go.gate.ru",)

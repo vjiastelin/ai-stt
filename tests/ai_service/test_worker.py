@@ -174,12 +174,12 @@ def test_delivering_job_resumes_without_retranscribing(env):
     assert json.loads(bpm.calls.last.request.content)["FullText"] == "[00:00:00] сохранённый текст"
 
 
-EMAIL_CFG = dict(smtp_host="smtp.example.kz", email_from="stt@example.kz", email_to=("ops@example.kz",))
+EMAIL_CFG = dict(ews_url="https://mail.example.kz/EWS/Exchange.asmx", email_from="stt@example.kz", email_to=("ops@example.kz",))
 
 
 @pytest.fixture
 def sent_emails(monkeypatch):
-    """Replaces the SMTP transport; set `.fail = True` to simulate an outage."""
+    """Replaces the email channel; set `.fail = True` to simulate an outage."""
     from ai_service import mailer
 
     class Outbox(list):
@@ -190,7 +190,7 @@ def sent_emails(monkeypatch):
     def fake_deliver(cfg, call_record_id, summary, full_text, error=False, error_description="",
                      call_record_url=""):
         if outbox.fail:
-            raise InfrastructureError("smtp down")
+            raise InfrastructureError("exchange down")
         outbox.append(dict(id=call_record_id, summary=summary, full_text=full_text,
                            error=error, error_description=error_description,
                            url=call_record_url))
@@ -251,7 +251,7 @@ def test_failed_channel_retried_without_resending_delivered_one(
     sent_emails.fail = True
 
     with pytest.raises(InfrastructureError):
-        worker.run_once()  # BPM accepted, SMTP down → stays delivering
+        worker.run_once()  # BPM accepted, Exchange down → stays delivering
     job = store.get("id-1")
     assert (job.status, job.delivered_channels) == ("delivering", {"bpm"})
 

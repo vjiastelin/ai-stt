@@ -43,7 +43,13 @@ def test_missing_required_var_raises():
         load_config(env)
 
 
-EMAIL = {"SMTP_HOST": "smtp.example.kz", "EMAIL_FROM": "stt@example.kz", "EMAIL_TO": "a@x.kz"}
+EMAIL = {
+    "EWS_URL": "https://mail.example.kz/EWS/Exchange.asmx",
+    "EWS_USERNAME": "EXAMPLE\\stt",
+    "EWS_PASSWORD": "pw",
+    "EMAIL_FROM": "stt@example.kz",
+    "EMAIL_TO": "a@x.kz",
+}
 
 
 def test_no_delivery_channel_raises():
@@ -63,10 +69,13 @@ def test_email_only():
     cfg = load_config({**env, **EMAIL})
     assert (cfg.bpm_enabled, cfg.email_enabled) == (False, True)
     assert cfg.bpm_callback_url == ""
-    assert cfg.smtp_host == "smtp.example.kz"
-    assert cfg.smtp_port == 587
-    assert cfg.smtp_security == "starttls"
-    assert cfg.smtp_timeout_seconds == 30
+    assert cfg.ews_url == "https://mail.example.kz/EWS/Exchange.asmx"
+    assert (cfg.ews_username, cfg.ews_password) == ("EXAMPLE\\stt", "pw")
+    assert cfg.ews_auth_type == ""  # autodetect
+    assert cfg.ews_access_type == "delegate"
+    assert cfg.ews_verify_ssl is True
+    assert cfg.ews_timeout_seconds == 60
+    assert cfg.ews_save_copy is False
     assert cfg.email_from == "stt@example.kz"
     assert cfg.email_to == ("a@x.kz",)
 
@@ -81,7 +90,7 @@ def test_email_to_is_comma_separated():
     assert cfg.email_to == ("a@x.kz", "b@x.kz")
 
 
-@pytest.mark.parametrize("missing", ["SMTP_HOST", "EMAIL_FROM", "EMAIL_TO"])
+@pytest.mark.parametrize("missing", ["EWS_URL", "EWS_USERNAME", "EWS_PASSWORD", "EMAIL_FROM", "EMAIL_TO"])
 def test_partial_email_config_raises(missing):
     env = {**REQUIRED, **EMAIL}
     del env[missing]
@@ -89,16 +98,38 @@ def test_partial_email_config_raises(missing):
         load_config(env)
 
 
-@pytest.mark.parametrize("security,port", [("ssl", 465), ("none", 25), ("starttls", 587)])
-def test_smtp_port_defaults_follow_security(security, port):
-    cfg = load_config({**REQUIRED, **EMAIL, "SMTP_SECURITY": security})
-    assert cfg.smtp_port == port
-    assert load_config({**REQUIRED, **EMAIL, "SMTP_SECURITY": security, "SMTP_PORT": "2525"}).smtp_port == 2525
+def test_ews_url_bare_host_means_standard_endpoint():
+    cfg = load_config({**REQUIRED, **EMAIL, "EWS_URL": "mail.example.kz"})
+    assert cfg.ews_url == "https://mail.example.kz/EWS/Exchange.asmx"
 
 
-def test_invalid_smtp_security_raises():
-    with pytest.raises(ConfigError, match="SMTP_SECURITY"):
-        load_config({**REQUIRED, **EMAIL, "SMTP_SECURITY": "tls"})
+def test_invalid_ews_url_raises():
+    with pytest.raises(ConfigError, match="EWS_URL"):
+        load_config({**REQUIRED, **EMAIL, "EWS_URL": "smtp://mail.example.kz"})
+
+
+def test_ews_options():
+    cfg = load_config({**REQUIRED, **EMAIL, "EWS_AUTH_TYPE": "NTLM", "EWS_VERIFY_SSL": "false",
+                       "EWS_TIMEOUT_SECONDS": "15", "EWS_SAVE_COPY": "true"})
+    assert (cfg.ews_auth_type, cfg.ews_verify_ssl, cfg.ews_timeout_seconds, cfg.ews_save_copy) == (
+        "ntlm", False, 15, True)
+
+
+def test_ews_access_type():
+    assert load_config({**REQUIRED, **EMAIL, "EWS_ACCESS_TYPE": "Impersonation"}).ews_access_type == "impersonation"
+    with pytest.raises(ConfigError, match="EWS_ACCESS_TYPE"):
+        load_config({**REQUIRED, **EMAIL, "EWS_ACCESS_TYPE": "owner"})
+
+
+def test_invalid_ews_auth_type_raises():
+    with pytest.raises(ConfigError, match="EWS_AUTH_TYPE"):
+        load_config({**REQUIRED, **EMAIL, "EWS_AUTH_TYPE": "kerberos"})
+
+
+@pytest.mark.parametrize("name", ["SMTP_HOST", "SMTP_PASSWORD"])
+def test_leftover_smtp_settings_raise(name):
+    with pytest.raises(ConfigError, match=f"replaced by Exchange.*{name}"):
+        load_config({**REQUIRED, **EMAIL, name: "x"})
 
 
 def test_llm_vars_required_only_when_summary_enabled():
