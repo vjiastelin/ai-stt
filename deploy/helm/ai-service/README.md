@@ -163,7 +163,7 @@ without it the ConfigMap disappears and routing falls back to `EMAIL_TO`.
 | `persistence.existingClaim` | `""` | reuse a PVC instead of creating one |
 | `nodeSelector` | `kubernetes.io/hostname: mow2ksw25` | **required with local-path** — the PV is node-local; see below |
 | `config.WHISPER_API_URL` | `http://whisper-api:8000/v1` | in-cluster whisper-api Service |
-| `config.BPM_CALLBACK_URL` | example | BPM endpoint; set it and/or the `SMTP_*`/`EMAIL_*` email channel (at least one) |
+| `config.BPM_CALLBACK_URL` | example | BPM endpoint; set it and/or the `EWS_*`/`EMAIL_*` email channel (at least one) |
 | `secrets.existingSecret` | `""` | reference a pre-created Secret |
 | `emailRouting` | `""` | TOML recipient table; pass with `--set-file emailRouting=config/email-routing.toml` |
 

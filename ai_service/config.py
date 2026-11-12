@@ -54,12 +54,14 @@ class ServiceConfig:
     bpm_callback_url: str
     bpm_csrf_token: str
     callback_timeout_seconds: int
-    smtp_host: str
-    smtp_port: int
-    smtp_security: str
-    smtp_username: str
-    smtp_password: str
-    smtp_timeout_seconds: int
+    # email via Exchange Web Services (exchangelib); enabled by EWS_URL
+    ews_url: str
+    ews_username: str
+    ews_password: str
+    ews_auth_type: str  # "" = autodetect, else one of EWS_AUTH_TYPES
+    ews_verify_ssl: bool
+    ews_timeout_seconds: int
+    ews_save_copy: bool  # keep a copy of each sent mail in the mailbox's Sent Items
     email_from: str
     email_to: tuple[str, ...]
     # (file-name glob, recipients) checked in order; first match overrides email_to
@@ -82,7 +84,7 @@ class ServiceConfig:
 
     @property
     def email_enabled(self) -> bool:
-        return bool(self.smtp_host)
+        return bool(self.ews_url)
 
 
 def _require(env: Mapping[str, str], name: str) -> str:
@@ -92,8 +94,21 @@ def _require(env: Mapping[str, str], name: str) -> str:
     return value
 
 
-SMTP_SECURITY_MODES = ("starttls", "ssl", "none")
-_SMTP_DEFAULT_PORTS = {"starttls": 587, "ssl": 465, "none": 25}
+EWS_AUTH_TYPES = ("ntlm", "basic", "digest")
+_REMOVED_SMTP_VARS = (
+    "SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_USERNAME", "SMTP_PASSWORD",
+    "SMTP_TIMEOUT_SECONDS",
+)
+
+
+def _parse_ews_url(raw: str) -> str:
+    """EWS endpoint URL; a bare host means the standard https://host/EWS/Exchange.asmx."""
+    if "://" not in raw:
+        return f"https://{raw.strip('/')}/EWS/Exchange.asmx"
+    parsed = urllib.parse.urlparse(raw)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ConfigError(f"EWS_URL must be an http(s) URL or a host name: {raw!r}")
+    return raw
 
 
 def _flag(env: Mapping[str, str], name: str, default: bool) -> bool:
@@ -228,22 +243,33 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
 
     # delivery channels: each is enabled by setting its variables; at least one is required
     bpm_callback_url = env.get("BPM_CALLBACK_URL", "").strip().rstrip("/")
-    email_enabled = bool(env.get("SMTP_HOST", "").strip() or env.get("EMAIL_TO", "").strip())
+    stale = [name for name in _REMOVED_SMTP_VARS if env.get(name, "").strip()]
+    if stale:
+        # email moved from SMTP to EWS: fail loudly instead of silently not mailing
+        raise ConfigError(
+            f"SMTP delivery was replaced by Exchange (EWS): unset {', '.join(stale)} "
+            "and set EWS_URL + EWS_USERNAME + EWS_PASSWORD instead"
+        )
+    email_enabled = bool(env.get("EWS_URL", "").strip() or env.get("EMAIL_TO", "").strip())
     if not bpm_callback_url and not email_enabled:
         raise ConfigError(
-            "no delivery channel configured: set BPM_CALLBACK_URL and/or SMTP_HOST + EMAIL_TO"
+            "no delivery channel configured: set BPM_CALLBACK_URL and/or EWS_URL + EMAIL_TO"
         )
-    smtp_security = env.get("SMTP_SECURITY", "starttls").strip().lower()
-    if smtp_security not in SMTP_SECURITY_MODES:
+    ews_auth_type = env.get("EWS_AUTH_TYPE", "").strip().lower()
+    if ews_auth_type and ews_auth_type not in EWS_AUTH_TYPES:
         raise ConfigError(
-            f"SMTP_SECURITY must be one of {', '.join(SMTP_SECURITY_MODES)}: {smtp_security!r}"
+            f"EWS_AUTH_TYPE must be empty (autodetect) or one of {', '.join(EWS_AUTH_TYPES)}: "
+            f"{ews_auth_type!r}"
         )
     if email_enabled:
-        smtp_host = _require(env, "SMTP_HOST")
+        ews_url = _parse_ews_url(_require(env, "EWS_URL"))
+        ews_username = _require(env, "EWS_USERNAME")
+        ews_password = _require(env, "EWS_PASSWORD")
         email_from = _require(env, "EMAIL_FROM")
         email_to = _parse_addresses(_require(env, "EMAIL_TO"))
     else:
-        smtp_host, email_from, email_to = "", env.get("EMAIL_FROM", ""), ()
+        ews_url, ews_username, ews_password = "", "", ""
+        email_from, email_to = env.get("EMAIL_FROM", ""), ()
     # loaded with or without the email channel: the table also says which team a
     # call belongs to, which the routing stats report for BPM-only setups too
     email_routes = parse_email_routes(env.get("EMAIL_ROUTES", ""))
@@ -255,7 +281,6 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         except RoutingError as exc:
             raise ConfigError(str(exc)) from exc
         email_routes += email_routing.file_routes  # EMAIL_ROUTES first, then the file's
-    smtp_port = env.get("SMTP_PORT", "").strip()
     prompt_profile, summary_prompt, whisper_prompt = _resolve_prompts(env)
     s3_scan_bucket, s3_scan_prefix = _parse_scan_url(env.get("S3_SCAN_URL", "").strip())
 
@@ -291,12 +316,14 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         bpm_callback_url=bpm_callback_url,
         bpm_csrf_token=env.get("BPM_CSRF_TOKEN", ""),
         callback_timeout_seconds=int(env.get("CALLBACK_TIMEOUT_SECONDS", "30")),
-        smtp_host=smtp_host,
-        smtp_port=int(smtp_port) if smtp_port else _SMTP_DEFAULT_PORTS[smtp_security],
-        smtp_security=smtp_security,
-        smtp_username=env.get("SMTP_USERNAME", ""),
-        smtp_password=env.get("SMTP_PASSWORD", ""),
-        smtp_timeout_seconds=int(env.get("SMTP_TIMEOUT_SECONDS", "30")),
+        ews_url=ews_url,
+        ews_username=ews_username,
+        ews_password=ews_password,
+        ews_auth_type=ews_auth_type,
+        # false accepts self-signed certs of an internal Exchange (not verified!)
+        ews_verify_ssl=_flag(env, "EWS_VERIFY_SSL", True),
+        ews_timeout_seconds=int(env.get("EWS_TIMEOUT_SECONDS", "60")),
+        ews_save_copy=_flag(env, "EWS_SAVE_COPY", False),
         email_from=email_from,
         email_to=email_to,
         email_routes=email_routes,

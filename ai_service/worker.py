@@ -81,7 +81,7 @@ class Worker:
             worked = True
 
         if not worked and delivery_error is not None:
-            raise delivery_error  # nothing else to do: back off instead of hammering BPM/SMTP
+            raise delivery_error  # nothing else to do: back off instead of hammering BPM/Exchange
         return worked
 
     def _process(self, job: Job) -> None:

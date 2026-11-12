@@ -1,13 +1,22 @@
-"""Deliver results by email over SMTP (alternative/extra channel to the BPM callback)."""
+"""Deliver results by email via Exchange Web Services (exchangelib).
+
+Alternative/extra channel to the BPM callback: the mail is sent from the EMAIL_FROM
+mailbox, authenticated as EWS_USERNAME.
+"""
 import fnmatch
 from dataclasses import dataclass
 import logging
 import re
-import smtplib
-import ssl
 import urllib.parse
-from email.message import EmailMessage
 from pathlib import PurePosixPath
+
+import requests
+from exchangelib import (
+    DELEGATE, Account, Body, Configuration, Credentials, FileAttachment, Mailbox, Message,
+)
+from exchangelib.errors import EWSError
+from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
+from exchangelib.transport import BASIC, DIGEST, NTLM
 
 from ai_service.config import ServiceConfig
 from ai_service.errors import InfrastructureError
@@ -78,6 +87,16 @@ def _source_lines(call_record_url: str) -> str:
     return lines
 
 
+@dataclass(frozen=True)
+class Mail:
+    """A message as built from a job, independent of the transport that sends it."""
+    sender: str
+    to: tuple[str, ...]
+    subject: str
+    body: str  # plain text
+    attachments: tuple[tuple[str, bytes], ...] = ()  # (file name, text/plain content)
+
+
 def build_message(
     cfg: ServiceConfig,
     call_record_id: str,
@@ -86,42 +105,66 @@ def build_message(
     error: bool = False,
     error_description: str = "",
     call_record_url: str = "",
-) -> EmailMessage:
-    msg = EmailMessage()
-    msg["From"] = cfg.email_from
-    msg["To"] = ", ".join(recipients_for(cfg, call_record_url, summary, full_text))
+) -> Mail:
+    to = recipients_for(cfg, call_record_url, summary, full_text)
     if error:
-        msg["Subject"] = f"Ошибка транскрибации звонка {call_record_id}"
-        msg.set_content(
-            f"Не удалось транскрибировать запись разговора {call_record_id}.\n"
-            + (f"{_source_lines(call_record_url)}\n" if call_record_url else "")
-            + f"\nПричина: {error_description}\n"
+        return Mail(
+            sender=cfg.email_from,
+            to=to,
+            subject=f"Ошибка транскрибации звонка {call_record_id}",
+            body=(
+                f"Не удалось транскрибировать запись разговора {call_record_id}.\n"
+                + (f"{_source_lines(call_record_url)}\n" if call_record_url else "")
+                + f"\nПричина: {error_description}\n"
+            ),
         )
-        return msg
-    msg["Subject"] = f"Транскрибация звонка {call_record_id}"
     parts = [f"Запись разговора: {call_record_id}"]
     if call_record_url:
         parts[0] += f"\n{_source_lines(call_record_url)}"
     if summary:
         parts.append(f"Краткое содержание:\n{summary}")
     parts.append(f"Транскрипт:\n{full_text}")
-    msg.set_content("\n\n".join(parts) + "\n")
-    msg.add_attachment(
-        full_text, subtype="plain", charset="utf-8", filename=f"{call_record_id}.txt"
+    return Mail(
+        sender=cfg.email_from,
+        to=to,
+        subject=f"Транскрибация звонка {call_record_id}",
+        body="\n\n".join(parts) + "\n",
+        attachments=((f"{call_record_id}.txt", full_text.encode("utf-8")),),
     )
-    return msg
 
 
-def _connect(cfg: ServiceConfig) -> smtplib.SMTP:
-    if cfg.smtp_security == "ssl":
-        return smtplib.SMTP_SSL(
-            cfg.smtp_host, cfg.smtp_port,
-            timeout=cfg.smtp_timeout_seconds, context=ssl.create_default_context(),
-        )
-    client = smtplib.SMTP(cfg.smtp_host, cfg.smtp_port, timeout=cfg.smtp_timeout_seconds)
-    if cfg.smtp_security == "starttls":
-        client.starttls(context=ssl.create_default_context())
-    return client
+_AUTH_TYPES = {"": None, "ntlm": NTLM, "basic": BASIC, "digest": DIGEST}  # None = autodetect
+
+
+def _account(cfg: ServiceConfig) -> Account:
+    """The EMAIL_FROM mailbox on the configured EWS endpoint (no network I/O yet)."""
+    # exchangelib keeps these per process, not per connection; this mailer is its only user
+    BaseProtocol.TIMEOUT = cfg.ews_timeout_seconds
+    if not cfg.ews_verify_ssl:
+        BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter
+    config = Configuration(
+        service_endpoint=cfg.ews_url,
+        credentials=Credentials(cfg.ews_username, cfg.ews_password),
+        auth_type=_AUTH_TYPES[cfg.ews_auth_type],
+        # default FailFast retry policy: the worker owns retries and backoff
+    )
+    return Account(cfg.email_from, config=config, autodiscover=False, access_type=DELEGATE)
+
+
+def to_ews_message(account: Account | None, mail: Mail) -> Message:
+    message = Message(
+        account=account,
+        subject=mail.subject,
+        body=Body(mail.body),
+        to_recipients=[Mailbox(email_address=address) for address in mail.to],
+    )
+    for name, content in mail.attachments:
+        message.attach(FileAttachment(name=name, content=content, content_type="text/plain"))
+    return message
+
+
+def send(cfg: ServiceConfig, mail: Mail) -> None:
+    to_ews_message(_account(cfg), mail).send(save_copy=cfg.ews_save_copy)
 
 
 def deliver(
@@ -137,12 +180,9 @@ def deliver(
         cfg, call_record_id, summary, full_text, error, error_description, call_record_url
     )
     try:
-        with _connect(cfg) as client:
-            if cfg.smtp_username:
-                client.login(cfg.smtp_username, cfg.smtp_password)
-            client.send_message(msg)
-        logger.info("emailed %s to %s", call_record_id, msg["To"])
-    except (smtplib.SMTPException, OSError) as exc:
+        send(cfg, msg)
+        logger.info("emailed %s to %s", call_record_id, ", ".join(msg.to))
+    except (EWSError, requests.RequestException, OSError) as exc:
         # like the BPM callback: recipients come from config, not the job, so any
         # failure (server down, auth, refused recipient) keeps the job delivering
         raise InfrastructureError(f"email delivery failed: {exc}") from exc

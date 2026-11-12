@@ -7,7 +7,7 @@ from ai_service import mailer, metrics
 from ai_service.app import create_app
 from ai_service.db import JobStore
 from ai_service.routing import parse_routing
-from tests.ai_service.test_mailer import FakeSMTP
+from tests.ai_service.test_mailer import FakeOutbox
 
 ROUTING = parse_routing({
     "default": "time017@aeroclub.team",
@@ -23,7 +23,7 @@ def summary(company="не указано", email="не указано"):
 
 @pytest.fixture
 def cfg(service_config):
-    return service_config(smtp_host="smtp", email_from="stt@aeroclub.team",
+    return service_config(ews_url="https://mail/EWS/Exchange.asmx", email_from="stt@aeroclub.team",
                           email_to=("fallback@aeroclub.team",), email_routing=ROUTING,
                           email_routes=ROUTING.file_routes)
 
@@ -45,7 +45,7 @@ def test_route_message_falls_back_to_the_transcript(cfg):
     # the result mail goes to the same team
     msg = mailer.build_message(cfg, "id-1", summary(), "[00:00:00] почта annasobakabayer.ru",
                                call_record_url="s3://c/IVR_1.wav")
-    assert msg["To"] == "time001@aeroclub.team"
+    assert msg.to == ("time001@aeroclub.team",)
 
 
 def _counter(by):
@@ -59,8 +59,7 @@ def _counter(by):
 
 
 def test_sent_result_mail_is_counted_and_default_is_logged(cfg, monkeypatch, caplog):
-    monkeypatch.setattr(mailer.smtplib, "SMTP", FakeSMTP)
-    FakeSMTP.instances, FakeSMTP.fail_with = [], None
+    monkeypatch.setattr(mailer, "send", FakeOutbox())
     before = {by: _counter(by) for by in ("domain", "default")}
     with caplog.at_level(logging.INFO, logger="ai_service.mailer"):
         mailer.deliver(cfg, "id-1", summary(email="a@bayer.ru"), "t", call_record_url="s3://c/IVR_1.wav")
@@ -75,12 +74,12 @@ def test_sent_result_mail_is_counted_and_default_is_logged(cfg, monkeypatch, cap
 
 
 def test_failed_send_is_not_counted(cfg, monkeypatch):
-    monkeypatch.setattr(mailer.smtplib, "SMTP", FakeSMTP)
-    FakeSMTP.instances, FakeSMTP.fail_with = [], ConnectionRefusedError("down")
+    outbox = FakeOutbox()
+    outbox.fail_with = ConnectionRefusedError("down")
+    monkeypatch.setattr(mailer, "send", outbox)
     before = _counter("domain")
     with pytest.raises(Exception):
         mailer.deliver(cfg, "id-1", summary(email="a@bayer.ru"), "t", call_record_url="s3://c/I.wav")
-    FakeSMTP.fail_with = None
     assert _counter("domain") == before
 
 
