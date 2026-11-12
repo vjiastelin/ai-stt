@@ -41,8 +41,11 @@ Two services:
   the job DB, so scans are incremental and survive restarts, and a failed job is
   not re-queued by the next scan. `S3_SCAN_MODIFIED_AFTER` skips older objects
   (e.g. the historical backlog). Scanned jobs get a stable UUID `CallRecordId`
-  derived from the object path; BPM doesn't know those ids, so deliver them by
-  email (the message shows the file path).
+  derived from the object path. BPM doesn't know those ids, so scanned jobs are
+  **never posted to BPM**, even when `BPM_CALLBACK_URL` is set (BPM requests and
+  the scanner can run side by side): they are delivered by email only (the
+  message shows the file path). Without the email channel their results stay in
+  the job DB (`GET /jobs/{id}`) and the service logs a warning at startup.
   Inspection endpoints: `GET /jobs` (list, newest first, `?status=` filter +
   `limit`/`offset`), `GET /jobs/{CallRecordId}` (status), and
   `GET /jobs/{CallRecordId}/result` (the `Summary` and `FullText`).

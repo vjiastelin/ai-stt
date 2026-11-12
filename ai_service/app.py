@@ -347,7 +347,8 @@ def create_app(cfg: ServiceConfig, store: JobStore) -> FastAPI:
                 mailer.route_message(cfg, job.call_record_url, summary, full_text),
                 cfg.email_enabled,
             )
-        if processed and cfg.bpm_enabled:
+        # scanned jobs are not sent to BPM (see Worker._channels)
+        if processed and cfg.bpm_enabled and not store.is_discovered(job.call_record_id):
             bpm = BpmDelivery(
                 url=callback.result_url(cfg, job.call_record_id),
                 payload=callback.build_payload(summary, full_text, is_error, error_description),

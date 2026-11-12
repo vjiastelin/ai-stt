@@ -91,6 +91,11 @@ class JobStore:
         with self._lock:
             self._conn.execute(_SCHEMA)
             self._conn.execute(_S3_OBJECTS_SCHEMA)
+            # is_discovered() runs on every delivery
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS s3_objects_call_record_id"
+                " ON s3_objects (call_record_id)"
+            )
             columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(jobs)")}
             for column, ddl in _MIGRATIONS.items():
                 if column not in columns:
@@ -135,6 +140,14 @@ class JobStore:
                     error=None,
                 )
             return self._fetch(call_record_id)
+
+    def is_discovered(self, call_record_id: str) -> bool:
+        """Whether the job came from the bucket scanner (vs. a BPM request)."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT 1 FROM s3_objects WHERE call_record_id = ? LIMIT 1", (call_record_id,)
+            ).fetchone()
+            return row is not None
 
     def known_s3_keys(self, bucket: str, prefix: str = "") -> set[str]:
         """Keys under bucket/prefix the scanner has already enqueued."""
