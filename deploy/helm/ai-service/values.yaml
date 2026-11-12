@@ -169,13 +169,14 @@ config:
   # email delivery via Exchange (EWS): uncomment to enable (EWS_PASSWORD goes in the Secret).
   # Values below were verified with a live send (2026-11-12). AI_OMNI_MAIL has no mailbox
   # and no delegate rights on ai_agent@ — it sends only via impersonation.
-  # NOTE: ews.aeroclub.int's certificate is issued by the corporate Aeroclub CA, which the
-  # image does not trust: until that CA is provided to the pod, sending fails TLS checks.
+  # ews.aeroclub.int's certificate is issued by the corporate Aeroclub CA, which the image
+  # does not trust (checked from the beta pod: CERTIFICATE_VERIFY_FAILED) — hence
+  # EWS_VERIFY_SSL "false" (TLS still encrypts, but the server is not authenticated).
   # EWS_URL: "ews.aeroclub.int"   # bare host = https://ews.aeroclub.int/EWS/Exchange.asmx
   # EWS_USERNAME: "AI_OMNI_MAIL"
   # EWS_AUTH_TYPE: "ntlm"         # empty = autodetect | ntlm | basic | digest
   # EWS_ACCESS_TYPE: "impersonation"   # delegate (Send As on EMAIL_FROM) | impersonation
-  # EWS_VERIFY_SSL: "true"
+  # EWS_VERIFY_SSL: "false"
   # EWS_TIMEOUT_SECONDS: "60"
   # EWS_SAVE_COPY: "false"        # "true" keeps a copy in Sent Items
   # EMAIL_FROM: "ai_agent@aeroclub.ru"

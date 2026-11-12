@@ -11,6 +11,7 @@ import urllib.parse
 from pathlib import PurePosixPath
 
 import requests
+import urllib3
 from exchangelib import (
     DELEGATE, IMPERSONATION, Account, Body, Configuration, Credentials, FileAttachment, Mailbox, Message,
 )
@@ -142,6 +143,8 @@ def _account(cfg: ServiceConfig) -> Account:
     BaseProtocol.TIMEOUT = cfg.ews_timeout_seconds
     if not cfg.ews_verify_ssl:
         BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter
+        # opted out on purpose: don't log InsecureRequestWarning on every EWS request
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     config = Configuration(
         service_endpoint=cfg.ews_url,
         credentials=Credentials(cfg.ews_username, cfg.ews_password),
