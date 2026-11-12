@@ -182,3 +182,15 @@ def test_old_database_gets_routing_columns(tmp_path):
     assert (store.get("a").route, store.get("a").route_by) == ("", "")
     store.set_routing("a", "Альянс", "domain", "t@x.ru")
     assert store.get("a").route == "Альянс"
+
+
+def test_delivery_view_omits_bpm_for_scanned_job(service_config, tmp_path, no_smtp):
+    cfg = service_config(smtp_host="smtp", email_from="stt@aeroclub.team",
+                         email_to=("fallback@aeroclub.team",))  # BPM + email
+    store = JobStore(str(tmp_path / "j.db"))
+    url = "s3://c/in/IVRrecord_1_9019988207.wav"
+    assert store.enqueue_discovered("c", "in/IVRrecord_1_9019988207.wav", None, "scan-1", url)
+    store.set_result("scan-1", "[00:00:00] привет", summary())
+    body = TestClient(create_app(cfg, store)).get("/jobs/scan-1/delivery").json()
+    assert body["bpm"] is None
+    assert body["email"]["to"] == ["fallback@aeroclub.team"]

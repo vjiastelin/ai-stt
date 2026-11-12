@@ -48,6 +48,12 @@ def main() -> None:
             cfg.s3_scan_bucket, cfg.s3_scan_prefix, cfg.s3_scan_interval_seconds,
             cfg.s3_scan_modified_after.isoformat() if cfg.s3_scan_modified_after else "-",
         )
+        if not cfg.email_enabled:
+            logging.getLogger(__name__).warning(
+                "S3 scanner without email: scanned recordings are not sent to BPM (it does"
+                " not know their ids), so their results stay in the job DB only"
+                " (GET /jobs/{id}); set SMTP_HOST + EMAIL_TO to mail them"
+            )
         scanner = Scanner(cfg, store, make_client(cfg))
         threading.Thread(target=scanner.run_forever, name="s3-scanner", daemon=True).start()
     app = create_app(cfg, store)
