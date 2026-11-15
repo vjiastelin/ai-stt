@@ -17,7 +17,8 @@ Two services:
   and the reason in `ErrorDescription`. When `BPM_CSRF_TOKEN` is set it is sent
   as the `x-api-key` request header.
   **Delivery channels** are chosen by configuration: BPM when `BPM_CALLBACK_URL`
-  is set, email (SMTP) when `SMTP_HOST` + `EMAIL_FROM` + `EMAIL_TO` are set,
+  is set, email via Exchange (EWS, `exchangelib`) when `EWS_URL` + `EWS_USERNAME` +
+  `EWS_PASSWORD` + `EMAIL_FROM` + `EMAIL_TO` are set,
   both when both are — at least one is required. The email carries Summary and
   FullText (plus FullText as a `{CallRecordId}.txt` attachment), or the error
   reason for a failed job. Each channel is retried independently until it
@@ -102,7 +103,7 @@ Design spec: `docs/superpowers/specs/2026-07-06-ai-stt-bpm-integration-design.md
 
 ## Run
 
-    cp .env.example .env   # fill in S3, BPM callback and/or SMTP, LLM endpoint
+    cp .env.example .env   # fill in S3, BPM callback and/or Exchange (EWS), LLM endpoint
     docker compose up --build
 
 By default compose runs **ai-service only**, against the external whisper-api
@@ -127,8 +128,8 @@ A `failed` job (see `GET /jobs/{id}`) is retried by re-POSTing
 BPM's result endpoint should be idempotent: delivery is at-least-once, so the
 same `{Summary, FullText, Error, ErrorDescription}` payload may be posted more
 than once (e.g. after a retry that BPM actually received but did not acknowledge
-with `200`). The same holds for email: a message may be sent twice if the SMTP
-server accepted it but the connection dropped before the reply.
+with `200`). The same holds for email: a message may be sent twice if Exchange
+accepted it but the connection dropped before the reply.
 
 ## Email routing table
 

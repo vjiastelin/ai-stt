@@ -108,7 +108,7 @@ class EmailDelivery(BaseModel):
     subject: str
     body: str
     attachment: str | None
-    delivered: bool = Field(description="The SMTP server accepted this result")
+    delivered: bool = Field(description="Exchange accepted this result")
 
 
 class DeliveryResponse(BaseModel):
@@ -356,12 +356,11 @@ def create_app(cfg: ServiceConfig, store: JobStore) -> FastAPI:
         if processed and cfg.email_enabled:
             msg = mailer.build_message(cfg, job.call_record_id, summary, full_text,
                                        is_error, error_description, job.call_record_url)
-            attachments = [part.get_filename() for part in msg.iter_attachments()]
             email = EmailDelivery(
-                to=[a.strip() for a in msg["To"].split(",") if a.strip()],
-                subject=msg["Subject"],
-                body=(msg.get_body(("plain",)) or msg).get_content(),
-                attachment=attachments[0] if attachments else None,
+                to=list(msg.to),
+                subject=msg.subject,
+                body=msg.body,
+                attachment=msg.attachments[0][0] if msg.attachments else None,
                 delivered="email" in job.delivered_channels,
             )
         return DeliveryResponse(CallRecordId=job.call_record_id, status=job.status,

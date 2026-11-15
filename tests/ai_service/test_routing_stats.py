@@ -26,7 +26,7 @@ def summary(company="не указано", email="не указано"):
 
 @pytest.fixture
 def email_cfg(service_config):
-    return service_config(smtp_host="smtp", email_from="stt@aeroclub.team",
+    return service_config(ews_url="https://mail/EWS/Exchange.asmx", email_from="stt@aeroclub.team",
                           email_to=("fallback@aeroclub.team",), email_routing=ROUTING,
                           email_routes=ROUTING.file_routes, bpm_callback_url="")
 
@@ -39,7 +39,7 @@ def deliver_result(store, cfg, job_id, url, text):
 
 
 @pytest.fixture
-def no_smtp(monkeypatch):
+def no_mail(monkeypatch):
     from ai_service import mailer
     monkeypatch.setattr(mailer, "deliver", lambda *a, **k: None)
 
@@ -64,7 +64,7 @@ def test_bpm_only_delivery_records_the_team(service_config, tmp_path):
     assert job.routed_at
 
 
-def test_email_delivery_records_recipients_and_new_result_resets_them(email_cfg, tmp_path, no_smtp):
+def test_email_delivery_records_recipients_and_new_result_resets_them(email_cfg, tmp_path, no_mail):
     store = JobStore(str(tmp_path / "j.db"))
     deliver_result(store, email_cfg, "id-1", "s3://c/GATE_1.wav", summary("Байер"))
     job = store.get("id-1")
@@ -73,7 +73,7 @@ def test_email_delivery_records_recipients_and_new_result_resets_them(email_cfg,
     assert (store.get("id-1").route_by, store.get("id-1").emailed_to) == ("", "")
 
 
-def test_failure_is_not_attributed(email_cfg, tmp_path, no_smtp):
+def test_failure_is_not_attributed(email_cfg, tmp_path, no_mail):
     store = JobStore(str(tmp_path / "j.db"))
     store.enqueue("id-1", "s3://c/IVR_1.wav")
     store.set_failed_result("id-1", "corrupt audio")
@@ -81,7 +81,7 @@ def test_failure_is_not_attributed(email_cfg, tmp_path, no_smtp):
     assert (store.get("id-1").status, store.get("id-1").route_by) == ("failed", "")
 
 
-def test_stats(email_cfg, tmp_path, no_smtp):
+def test_stats(email_cfg, tmp_path, no_mail):
     store = JobStore(str(tmp_path / "j.db"))
     for job_id, url, text in [
         ("a", "s3://c/IVR_a.wav", summary(email="i@bayer.ru")),
@@ -121,8 +121,8 @@ def test_preview(email_cfg, tmp_path):
     assert client.post("/routing/preview", json={"Summary": ""}).status_code == 400
 
 
-def test_delivery_view_shows_bpm_payload_email_and_routing(service_config, tmp_path, no_smtp):
-    cfg = service_config(smtp_host="smtp", email_from="stt@aeroclub.team",
+def test_delivery_view_shows_bpm_payload_email_and_routing(service_config, tmp_path, no_mail):
+    cfg = service_config(ews_url="https://mail/EWS/Exchange.asmx", email_from="stt@aeroclub.team",
                          email_to=("fallback@aeroclub.team",), email_routing=ROUTING,
                          email_routes=ROUTING.file_routes)  # BPM + email
     store = JobStore(str(tmp_path / "j.db"))
