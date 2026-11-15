@@ -167,19 +167,20 @@ config:
   BPM_CALLBACK_URL: "http://mow2crm6:5000"
   CALLBACK_TIMEOUT_SECONDS: "30"
   # email delivery via Exchange (EWS): uncomment to enable (EWS_PASSWORD goes in the Secret).
-  # Values below were verified with a live send (2026-11-12). AI_OMNI_MAIL has no mailbox
-  # and no delegate rights on ai_agent@ — it sends only via impersonation.
+  # Values below were verified with a live send (2026-11-15). aai_sender sends from its own
+  # mailbox (delegate); it has no Send As / impersonation rights on other mailboxes, so
+  # EMAIL_FROM must stay aai_sender@aeroclub.ru and EWS_SAVE_COPY "false" is safe either way.
   # ews.aeroclub.int's certificate is issued by the corporate Aeroclub CA, which the image
   # does not trust (checked from the beta pod: CERTIFICATE_VERIFY_FAILED) — hence
   # EWS_VERIFY_SSL "false" (TLS still encrypts, but the server is not authenticated).
   # EWS_URL: "ews.aeroclub.int"   # bare host = https://ews.aeroclub.int/EWS/Exchange.asmx
-  # EWS_USERNAME: "AI_OMNI_MAIL"
+  # EWS_USERNAME: "aai_sender"
   # EWS_AUTH_TYPE: "ntlm"         # empty = autodetect | ntlm | basic | digest
-  # EWS_ACCESS_TYPE: "impersonation"   # delegate (Send As on EMAIL_FROM) | impersonation
+  # EWS_ACCESS_TYPE: "delegate"   # delegate (Send As on EMAIL_FROM) | impersonation
   # EWS_VERIFY_SSL: "false"
   # EWS_TIMEOUT_SECONDS: "60"
   # EWS_SAVE_COPY: "false"        # "true" keeps a copy in Sent Items
-  # EMAIL_FROM: "ai_agent@aeroclub.ru"
+  # EMAIL_FROM: "aai_sender@aeroclub.ru"
   # EMAIL_TO: "ops@example.kz,qa@example.kz"   # default recipients
   # per-file-name routing, first match wins (see .env.example)
   # EMAIL_ROUTES: "AWAD_IVRrecord_*=anywayanyday-info-gate@yandex.ru; GATE_IVRrecord_*=info@go.gate.ru"
