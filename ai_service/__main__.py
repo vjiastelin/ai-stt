@@ -52,7 +52,7 @@ def main() -> None:
             logging.getLogger(__name__).warning(
                 "S3 scanner without email: scanned recordings are not sent to BPM (it does"
                 " not know their ids), so their results stay in the job DB only"
-                " (GET /jobs/{id}); set SMTP_HOST + EMAIL_TO to mail them"
+                " (GET /jobs/{id}); set EWS_URL + EWS_USERNAME + EMAIL_FROM + EMAIL_TO to mail them"
             )
         scanner = Scanner(cfg, store, make_client(cfg))
         threading.Thread(target=scanner.run_forever, name="s3-scanner", daemon=True).start()
