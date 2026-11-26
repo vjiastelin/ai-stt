@@ -45,7 +45,7 @@ class JobStatusResponse(BaseModel):
     created_at: str
     updated_at: str
     route: str = Field("", description="Team the delivered result was attributed to")
-    route_by: str = Field("", description="file / domain / company / transcript / default; empty until delivered")
+    route_by: str = Field("", description="filename / file / domain / company / transcript / default; empty until delivered")
 
 
 JobState = Literal["queued", "processing", "delivering", "done", "failed"]
@@ -84,7 +84,7 @@ class UnmatchedReport(BaseModel):
 
 class RouteInfo(BaseModel):
     route: str = Field(description="Team (route name) the call belongs to; empty = not recognized")
-    by: Literal["file", "domain", "company", "transcript", "default"]
+    by: Literal["filename", "file", "domain", "company", "transcript", "default"]
     company: str = Field(description="«Компания:» as recognized in the summary")
     domain: str = Field(description="Domain of the client's address in the summary")
     email_to: list[str] = Field(description="Recipients of the result e-mail (when email is on)")
@@ -129,7 +129,7 @@ class PreviewRequest(BaseModel):
 class StatsRoute(BaseModel):
     route: str = Field(description="Team (route name); «не опознан» for the default mailbox")
     count: int
-    by: dict[str, int] = Field(description="How the calls were attributed: file / domain / company / transcript / default")
+    by: dict[str, int] = Field(description="How the calls were attributed: filename / file / domain / company / transcript / default")
     email_to: list[str] = Field(description="Mailboxes these results were e-mailed to")
 
 

@@ -7,6 +7,7 @@ from exchangelib.transport import NTLM
 
 from ai_service import mailer
 from ai_service.errors import InfrastructureError
+from ai_service.routing import ClientRoute, Routing, normalize_company
 
 
 class FakeOutbox(list):
@@ -166,6 +167,8 @@ def test_source_file_shown_when_known(email_config):
         ("s3://calls/in_9019988207/rec.wav", ""),         # digits in a folder, not the file
         ("s3://calls/rec.wav", ""),                        # no "_"
         ("s3://calls/rec_12.wav", ""),                     # too short to be a phone
+        ("s3://calls/IVRrecord_00000000-01dd-7ce0-165a-4bac00001356_9636723268_SAM.SAM@aeroclub.ru.wav",
+         "9636723268"),                                    # an address after the phone
         ("", ""),
     ],
 )
@@ -223,3 +226,72 @@ def test_routed_message_is_sent_to_route_recipients(email_config, fake_outbox):
     mailer.deliver(cfg, "id-1", "s", "t", call_record_url="s3://c/GATE_IVRrecord_1_9019988207.wav")
     [mail] = fake_outbox
     assert mail.to == ("info@go.gate.ru",)
+
+
+NAMED = "s3://calls/in/IVRrecord_00000000-01dd-7ce0-165a-4bac00001356_9636723268_SAM.SAM@aeroclub.ru.wav"
+
+
+@pytest.mark.parametrize(
+    "url,email",
+    [
+        (NAMED, "SAM.SAM@aeroclub.ru"),
+        ("https://minio/calls/IVRrecord_1_9636723268_ivan_petrov%40aeroclub.ru.mp3",
+         "ivan_petrov@aeroclub.ru"),                       # "_" in the local part, url-encoded "@"
+        ("s3://calls/IVRrecord_1_a.b@aeroclub.team.wav", "a.b@aeroclub.team"),  # no phone
+        ("s3://calls/IVRrecord_1_9636723268.wav", ""),
+        ("s3://calls/IVRrecord_1_9636723268_SAM@aeroclub.wav", ""),  # no TLD
+        ("s3://calls/IVRrecord_1_9636723268_not an@address.ru.wav", ""),
+        ("s3://calls/a@b.ru/IVRrecord_1_9636723268.wav", ""),  # address in a folder, not the file
+        ("", ""),
+    ],
+)
+def test_email_from_url(url, email):
+    assert mailer.email_from_url(url) == email
+
+
+@pytest.fixture
+def filename_cfg(email_config):
+    def make(**overrides):
+        routing = Routing(default=("table-default@x.ru",), client_routes=(ClientRoute(
+            name="Альянс", to=("team@x.ru",), domains=("sibur.ru",),
+            companies=(normalize_company("Сибур"),)),))
+        base = dict(email_to=("fallback@x.ru",), email_filename_recipient=True,
+                    email_routes=(("IVRrecord_*", ("glob@x.ru",)),), email_routing=routing)
+        base.update(overrides)
+        return email_config(**base)
+    return make
+
+
+def test_filename_recipient_ignores_routing(filename_cfg):
+    decision = mailer.route_message(filename_cfg(), NAMED, summary="Компания: Сибур\nПочта: i@sibur.ru")
+    assert decision.to == ("SAM.SAM@aeroclub.ru",)
+    assert (decision.by, decision.route) == ("filename", "")
+    assert mailer.build_message(filename_cfg(), "id-1", "s", "t", call_record_url=NAMED).to == (
+        "SAM.SAM@aeroclub.ru",)
+    err = mailer.build_message(filename_cfg(), "id-1", "", "", error=True,
+                               error_description="boom", call_record_url=NAMED)
+    assert err.to == ("SAM.SAM@aeroclub.ru",)
+
+
+@pytest.mark.parametrize("url", ["s3://calls/IVRrecord_1_9636723268.wav", ""])
+def test_filename_recipient_without_address_goes_to_email_to(filename_cfg, url):
+    decision = mailer.route_message(filename_cfg(), url, summary="Компания: Сибур\nПочта: i@sibur.ru")
+    assert (decision.to, decision.by) == (("fallback@x.ru",), "default")
+
+
+@pytest.mark.parametrize("domains,to", [
+    (("aeroclub.ru",), "SAM.SAM@aeroclub.ru"),
+    (("ru",), "SAM.SAM@aeroclub.ru"),               # subdomain of a listed domain
+    (("aeroclub.team",), "fallback@x.ru"),
+    (("club.ru",), "fallback@x.ru"),                # suffix, not a subdomain
+])
+def test_filename_recipient_domain_allowlist(filename_cfg, domains, to, caplog):
+    decision = mailer.route_message(filename_cfg(email_filename_domains=domains), NAMED)
+    assert decision.to == (to,)
+    if to == "fallback@x.ru":
+        assert "not in EMAIL_FILENAME_DOMAINS" in caplog.text
+
+
+def test_filename_mode_off_keeps_table_routing(filename_cfg):
+    cfg = filename_cfg(email_filename_recipient=False)
+    assert mailer.route_message(cfg, NAMED).to == ("glob@x.ru",)

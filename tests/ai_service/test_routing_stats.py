@@ -1,3 +1,4 @@
+import dataclasses
 import sqlite3
 
 import httpx
@@ -119,6 +120,15 @@ def test_preview(email_cfg, tmp_path):
         "Summary": summary(), "FullText": "[00:00:00] почта annasobakabayer.ru"}).json()
     assert (glued["route"], glued["by"]) == ("Альянс", "transcript")
     assert client.post("/routing/preview", json={"Summary": ""}).status_code == 400
+
+
+def test_preview_with_filename_recipient(email_cfg, tmp_path):
+    cfg = dataclasses.replace(email_cfg, email_filename_recipient=True)
+    client = TestClient(create_app(cfg, JobStore(str(tmp_path / "j.db"))))
+    url = "s3://c/GATE_IVRrecord_1_9636723268_SAM.SAM@aeroclub.ru.wav"  # a GATE file rule too
+    got = client.post("/routing/preview",
+                      json={"CallRecordUrl": url, "Summary": summary(email="ivan@bayer.ru")}).json()
+    assert (got["route"], got["by"], got["email_to"]) == ("", "filename", ["SAM.SAM@aeroclub.ru"])
 
 
 def test_delivery_view_shows_bpm_payload_email_and_routing(service_config, tmp_path, no_mail):
