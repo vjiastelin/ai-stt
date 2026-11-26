@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.11.0...ai-service-v0.12.0) (2026-11-26)
+
+
+### Features
+
+* **ai-service:** mail the address from the file name, bypassing the routing table ([#52](https://github.com/vjiastelin/ai-stt/issues/52)) ([908e468](https://github.com/vjiastelin/ai-stt/commit/908e468ea2dfc00fa0989637d1c833cbf0cdeeab))
+
 ## [0.11.0](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.10.3...ai-service-v0.11.0) (2026-11-26)
 
 
