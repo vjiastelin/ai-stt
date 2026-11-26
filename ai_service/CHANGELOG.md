@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.11.0](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.10.3...ai-service-v0.11.0) (2026-11-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* **ai-service:** SMTP_* settings are removed and the service refuses to start while any of them is set. Replace them with EWS_* and add EWS_PASSWORD to the ai-service-secrets Secret.
+
+### Features
+
+* **ai-service:** send email via Exchange Web Services (exchangelib) ([#48](https://github.com/vjiastelin/ai-stt/issues/48)) ([4b575a2](https://github.com/vjiastelin/ai-stt/commit/4b575a24b961c8e33c0976cccf2b135a76c0123f))
+
 ## [0.10.3](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.10.2...ai-service-v0.10.3) (2026-11-26)
 
 
