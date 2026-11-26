@@ -184,6 +184,11 @@ config:
   # EMAIL_TO: "ops@example.kz,qa@example.kz"   # default recipients
   # per-file-name routing, first match wins (see .env.example)
   # EMAIL_ROUTES: "AWAD_IVRrecord_*=anywayanyday-info-gate@yandex.ru; GATE_IVRrecord_*=info@go.gate.ru"
+  # direct routing: mail only the address at the end of the file name
+  # (…_<phone>_SAM.SAM@aeroclub.ru.wav); EMAIL_ROUTES / the routing table are then ignored
+  # for recipients, files without an address go to EMAIL_TO (see .env.example)
+  # EMAIL_FILENAME_RECIPIENT: "true"
+  # EMAIL_FILENAME_DOMAINS: "aeroclub.ru"   # permitted domains; empty = any
   MAX_RETRIES: "3"
   RETRY_BACKOFF_CAP_SECONDS: "300"
   DB_PATH: "/data/jobs.db"

@@ -27,22 +27,65 @@ from ai_service.routing import client_company, client_email_domain, match_client
 logger = logging.getLogger(__name__)
 
 
-# IVR recordings are named <prefix>_<uuid>_<phone>.<ext>, e.g.
+# IVR recordings are named <prefix>_<uuid>_<phone>[_<email>].<ext>, e.g.
 # IVRrecord_00000000-01dd-50cc-52ec-24dc00009d25_9019988207.wav → 9019988207
-_PHONE_SUFFIX = re.compile(r"_(\d{5,15})$")
+# IVRrecord_00000000-01dd-7ce0-165a-4bac00001356_9636723268_SAM.SAM@aeroclub.ru.wav
+#   → 9636723268, SAM.SAM@aeroclub.ru
+_PHONE = re.compile(r"\d{5,15}")
+_EMAIL = re.compile(
+    r"[A-Za-z0-9.!#$%&'*+=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}"
+)
+
+
+def _file_stem(call_record_url: str) -> str:
+    path = urllib.parse.unquote(urllib.parse.urlparse(call_record_url).path)
+    return PurePosixPath(path).stem
+
+
+def _phone_and_email(call_record_url: str) -> tuple[str, str]:
+    """(phone, email) from the file name's "_"-separated tail; "" for what is missing.
+
+    The address is what follows the phone (so a local part may contain "_"); without a
+    phone it is the last "_" segment. A trailing segment with "@" that is not a valid
+    address yields no email and no phone.
+    """
+    if not call_record_url:
+        return "", ""
+    parts = _file_stem(call_record_url).split("_")
+    if len(parts) < 2:
+        return "", ""
+    if _PHONE.fullmatch(parts[-1]):
+        return parts[-1], ""
+    for i in range(len(parts) - 2, 0, -1):
+        if _PHONE.fullmatch(parts[i]):
+            tail = "_".join(parts[i + 1:])
+            return (parts[i], tail) if _EMAIL.fullmatch(tail) else ("", "")
+    return "", parts[-1] if _EMAIL.fullmatch(parts[-1]) else ""
 
 
 def phone_from_url(call_record_url: str) -> str:
-    """Caller phone from the digits after the file name's last "_", else ""."""
-    path = urllib.parse.unquote(urllib.parse.urlparse(call_record_url).path)
-    match = _PHONE_SUFFIX.search(PurePosixPath(path).stem)
-    return match.group(1) if match else ""
+    """Caller phone: the digits after the uuid in the file name, else ""."""
+    return _phone_and_email(call_record_url)[0]
+
+
+def email_from_url(call_record_url: str) -> str:
+    """Recipient address at the end of the file name (after the phone), else ""."""
+    return _phone_and_email(call_record_url)[1]
+
+
+def _domain_allowed(address: str, allowed: tuple[str, ...]) -> bool:
+    """Empty list = any domain; otherwise the domain itself or a subdomain of one listed."""
+    if not allowed:
+        return True
+    domain = address.rsplit("@", 1)[1].lower()
+    return any(domain == d or domain.endswith("." + d) for d in allowed)
 
 
 @dataclass(frozen=True)
 class RoutingDecision:
     to: tuple[str, ...]
-    by: str        # file | domain | company | transcript | default
+    by: str        # filename | file | domain | company | transcript | default
     company: str   # «Компания:» as recognized ("" if none)
     domain: str    # domain of the client's address ("" if none)
     route: str = ""  # team label: the route's / file rule's name, "" for default
@@ -51,7 +94,11 @@ class RoutingDecision:
 def route_message(
     cfg: ServiceConfig, call_record_url: str, summary: str = "", transcript: str = ""
 ) -> RoutingDecision:
-    """Recipients for a record, first rule that applies:
+    """Recipients for a record.
+
+    With EMAIL_FILENAME_RECIPIENT on, the address at the end of the file name is the
+    only recipient and the routing table / EMAIL_ROUTES are ignored; a file without a
+    (permitted) address goes to EMAIL_TO. Otherwise the first rule that applies:
 
     1. file-name routes (EMAIL_ROUTES, then the routing file's [[file_route]]);
     2. client routes from the routing file — the client's e-mail domain, then
@@ -60,6 +107,14 @@ def route_message(
     3. the routing file's `default`, else EMAIL_TO.
     """
     company, domain = client_company(summary), client_email_domain(summary)
+    if cfg.email_filename_recipient:
+        address = email_from_url(call_record_url)
+        if address and _domain_allowed(address, cfg.email_filename_domains):
+            return RoutingDecision((address,), "filename", company, domain)
+        if address:
+            logger.warning("recipient %s from the file name is not in EMAIL_FILENAME_DOMAINS;"
+                           " mailing EMAIL_TO instead", address)
+        return RoutingDecision(cfg.email_to, "default", company, domain)
     if call_record_url:
         name = PurePosixPath(urllib.parse.unquote(urllib.parse.urlparse(call_record_url).path)).name
         names = dict(cfg.email_routing.file_route_names)

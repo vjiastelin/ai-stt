@@ -26,6 +26,13 @@ Two services:
   `EMAIL_ROUTES` (`"AWAD_IVRrecord_*=a@x.ru; GATE_IVRrecord_*=b@y.ru"`) routes mail
   by the recording's file name: the first matching glob (case-sensitive, folder
   ignored) replaces `EMAIL_TO`, which stays the default for everything else.
+  **Direct routing by file name** (`EMAIL_FILENAME_RECIPIENT=true`): a recording
+  named `IVRrecord_<uuid>_<phone>_SAM.SAM@aeroclub.ru.wav` is mailed to
+  `SAM.SAM@aeroclub.ru` only — `EMAIL_ROUTES` and the routing table are ignored
+  for recipients in this mode, and files without an address go to `EMAIL_TO`.
+  `EMAIL_FILENAME_DOMAINS` (`"aeroclub.ru"`, subdomains included) restricts the
+  addresses taken from file names; one outside the list goes to `EMAIL_TO`
+  with a warning in the log.
   The full routing table lives in a TOML file (`EMAIL_ROUTING_FILE`; format and
   the current table: [`config/email-routing.toml`](config/email-routing.toml)):
   file-name rules first, then client routes by the e-mail domain (subdomains
@@ -165,7 +172,7 @@ Recipients are chosen per record from [`config/email-routing.toml`](config/email
 - To see who is missing from the table: `GET /routing/unmatched?days=30`; every
   result mail sent to the default mailbox is also logged as
   `email routed to default: id=… company=… domain=…`, and
-  `ai_service_email_routed_total{by="file|domain|company|transcript|default"}` counts mails
+  `ai_service_email_routed_total{by="filename|file|domain|company|transcript|default"}` counts mails
   per rule.
 - A broken table (bad TOML, unknown key, invalid domain/address, a domain or
   company listed twice) stops startup with the offending entry in the log; the

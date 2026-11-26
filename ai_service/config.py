@@ -71,6 +71,11 @@ class ServiceConfig:
     email_routes: tuple[tuple[str, tuple[str, ...]], ...]
     # domain/company routes + optional fallback from EMAIL_ROUTING_FILE
     email_routing: Routing
+    # EMAIL_FILENAME_RECIPIENT: mail the address at the end of the file name, ignoring
+    # email_routes / email_routing (files without one go to email_to)
+    email_filename_recipient: bool
+    # EMAIL_FILENAME_DOMAINS: permitted domains (subdomains included) for that address; () = any
+    email_filename_domains: tuple[str, ...]
     max_retries: int
     retry_backoff_cap_seconds: int
     db_path: str
@@ -338,6 +343,10 @@ def load_config(env: Mapping[str, str] = os.environ) -> ServiceConfig:
         email_to=email_to,
         email_routes=email_routes,
         email_routing=email_routing,
+        email_filename_recipient=_flag(env, "EMAIL_FILENAME_RECIPIENT", False),
+        email_filename_domains=tuple(
+            d.lower().lstrip("@.") for d in _parse_addresses(env.get("EMAIL_FILENAME_DOMAINS", ""))
+        ),
         max_retries=int(env.get("MAX_RETRIES", "3")),
         retry_backoff_cap_seconds=int(env.get("RETRY_BACKOFF_CAP_SECONDS", "300")),
         db_path=env.get("DB_PATH", "/data/jobs.db"),

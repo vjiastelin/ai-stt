@@ -46,6 +46,8 @@ def service_config(tmp_path):
             email_to=(),
             email_routes=(),
             email_routing=Routing(),
+            email_filename_recipient=False,
+            email_filename_domains=(),
             max_retries=3,
             retry_backoff_cap_seconds=300,
             db_path=str(tmp_path / "jobs.db"),

@@ -278,3 +278,16 @@ def test_email_routes_parsed():
 def test_invalid_email_routes_raise(raw):
     with pytest.raises(ConfigError, match="EMAIL_ROUTES"):
         load_config({**REQUIRED, **EMAIL, "EMAIL_ROUTES": raw})
+
+
+def test_filename_recipient_off_by_default():
+    cfg = load_config({**REQUIRED, **EMAIL})
+    assert cfg.email_filename_recipient is False
+    assert cfg.email_filename_domains == ()
+
+
+def test_filename_recipient_settings():
+    cfg = load_config({**REQUIRED, **EMAIL, "EMAIL_FILENAME_RECIPIENT": "true",
+                       "EMAIL_FILENAME_DOMAINS": " Aeroclub.ru, @aeroclub.team ,"})
+    assert cfg.email_filename_recipient is True
+    assert cfg.email_filename_domains == ("aeroclub.ru", "aeroclub.team")
