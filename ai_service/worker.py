@@ -137,7 +137,9 @@ class Worker:
 
     def _channels(self, job: Job):
         """Enabled delivery channels as (name, metrics stage, deliver fn, extra kwargs)."""
-        if self.cfg.bpm_enabled:
+        # scanned recordings have a synthetic uuid5 id BPM never issued: posting it would
+        # never get a 200 and would keep the job delivering forever — email only
+        if self.cfg.bpm_enabled and not self.store.is_discovered(job.call_record_id):
             yield "bpm", "callback", callback.deliver, {}
         if self.cfg.email_enabled:
             # scanned recordings have a synthetic id: the file path tells the reader which call
