@@ -1,0 +1,56 @@
+# Overrides for the `beta` namespace (release `ai-stt`), on top of values.yaml.
+# Built from the local .env (2026-11-26). No secrets here: EWS_PASSWORD, S3 keys,
+# LLM_API_KEY and WHISPER_API_KEY live in the `ai-service-secrets` Secret.
+#
+#   helm upgrade ai-stt deploy/helm/ai-service -n beta \
+#     -f deploy/helm/ai-service/values-beta.yaml \
+#     --set-file emailRouting=config/email-routing.toml
+#
+# --set-file emailRouting mounts the routing table and sets EMAIL_ROUTING_FILE itself
+# (do not put a path in config). With EMAIL_FILENAME_RECIPIENT on, the table does not
+# pick recipients; it still feeds the summary prompt's {KNOWN_EMAIL_DOMAINS} and
+# GET /routing/stats.
+#
+# `config` is a map, so these keys are merged over values.yaml's: keys not listed
+# here (S3_ENDPOINT_URL, CALLBACK_TIMEOUT_SECONDS, MAX_RETRIES, DB_PATH, …) keep
+# their defaults.
+config:
+  # --- S3: bucket scanner (the only job source: BPM is off below) ---
+  S3_ENDPOINT_URL: "https://s3.yandexcloud.net"
+  S3_SCAN_URL: "s3://ai-json-logs/3cx-records-transcript/"
+  S3_SCAN_INTERVAL_SECONDS: "30"
+  # every recording newer than this is transcribed and MAILED on the first scan
+  S3_SCAN_MODIFIED_AFTER: "2026-11-10T00:00:00Z"
+
+  # --- Whisper (external, behind llm-proxy) ---
+  WHISPER_API_URL: "https://llm-proxy.yc1.aeroclub.ru/v1"
+  WHISPER_MODEL: "whisper/large-v3"
+  WHISPER_TIMEOUT_SECONDS: "600"
+
+  # --- Summary (external LLM) ---
+  SUMMARY_ENABLED: "true"
+  LLM_API_URL: "https://llm-proxy.yc1.aeroclub.ru/v1"
+  LLM_MODEL: "qwen-auto"
+  LLM_TIMEOUT_SECONDS: "600"
+  LLM_EXTRA_BODY: '{"chat_template_kwargs":{"enable_thinking":false}}'
+  PROMPT_PROFILE: "voicemail"
+  KNOWN_EMAIL_DOMAINS: "Аэроклуб|Аэроклуб ИТ=aeroclub.ru"
+
+  # --- Delivery: email only ---
+  BPM_CALLBACK_URL: ""   # overrides values.yaml's BPM host: BPM delivery off
+
+  # Exchange (EWS), verified with a live send 2026-11-15
+  EWS_URL: "https://ews.aeroclub.int/EWS/Exchange.asmx"
+  EWS_USERNAME: "aai_sender"
+  EWS_AUTH_TYPE: "ntlm"
+  EWS_ACCESS_TYPE: "delegate"
+  EWS_VERIFY_SSL: "false"   # corporate Aeroclub CA is not trusted by the image
+  EWS_SAVE_COPY: "false"
+  EMAIL_FROM: "aai_sender@aeroclub.ru"     # aai_sender has no Send As on other mailboxes
+  EMAIL_TO: "igor.abrashin@aeroclub.ru"    # fallback: files without an address in the name
+
+  # direct routing: mail only the address at the end of the file name
+  EMAIL_FILENAME_RECIPIENT: "true"
+  EMAIL_FILENAME_DOMAINS: "aeroclub.ru"
+
+  LOG_LEVEL: "INFO"
