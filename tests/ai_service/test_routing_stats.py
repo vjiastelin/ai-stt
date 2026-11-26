@@ -184,8 +184,8 @@ def test_old_database_gets_routing_columns(tmp_path):
     assert store.get("a").route == "Альянс"
 
 
-def test_delivery_view_omits_bpm_for_scanned_job(service_config, tmp_path, no_smtp):
-    cfg = service_config(smtp_host="smtp", email_from="stt@aeroclub.team",
+def test_delivery_view_omits_bpm_for_scanned_job(service_config, tmp_path, no_mail):
+    cfg = service_config(ews_url="https://mail/EWS/Exchange.asmx", email_from="stt@aeroclub.team",
                          email_to=("fallback@aeroclub.team",))  # BPM + email
     store = JobStore(str(tmp_path / "j.db"))
     url = "s3://c/in/IVRrecord_1_9019988207.wav"
