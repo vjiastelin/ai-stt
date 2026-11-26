@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.3](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.10.2...ai-service-v0.10.3) (2026-11-26)
+
+
+### Bug Fixes
+
+* **ai-service:** never post scanned recordings to the BPM callback ([#49](https://github.com/vjiastelin/ai-stt/issues/49)) ([230afe1](https://github.com/vjiastelin/ai-stt/commit/230afe1a3883dfce09f6b3afe12e03fcadedd539))
+
 ## [0.10.2](https://github.com/vjiastelin/ai-stt/compare/ai-service-v0.10.1...ai-service-v0.10.2) (2026-10-19)
 
 
