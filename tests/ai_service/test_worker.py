@@ -313,3 +313,57 @@ def test_scanned_recording_is_processed(env, service_config):
     [job] = store.list_jobs()
     assert job.status == "delivering"
     assert b'filename="audio.wav"' in whisper.calls.last.request.content
+
+
+SCANNED_URL = "s3://call-records/in/IVRrecord_1_9019988207.wav"
+
+
+def _enqueue_scanned(store, job_id="scan-1", url=SCANNED_URL):
+    assert store.enqueue_discovered("call-records", url.split("/", 3)[3], None, job_id, url)
+    store.set_result(job_id, "[00:00:00] текст", "суть")
+
+
+@respx.mock
+def test_scanned_job_is_emailed_but_not_posted_to_bpm(env, service_config, monkeypatch, sent_emails):
+    store, _ = env
+    bpm = respx.post(url__regex=BPM_URL_REGEX).mock(return_value=httpx.Response(200))
+    worker = _email_worker(store, service_config, monkeypatch)  # BPM + email
+    _enqueue_scanned(store)
+    store.enqueue("bpm-1", "s3://call-records/rec.mp3")  # a BPM request alongside
+    store.set_result("bpm-1", "t", "s")
+
+    assert worker.run_once() is True
+
+    scanned, requested = store.get("scan-1"), store.get("bpm-1")
+    assert (scanned.status, scanned.delivered_channels) == ("done", {"email"})
+    assert (requested.status, requested.delivered_channels) == ("done", {"bpm", "email"})
+    assert [call.request.url.path.split("/")[-2] for call in bpm.calls] == ["bpm-1"]
+    assert sorted(m["id"] for m in sent_emails) == ["bpm-1", "scan-1"]
+
+
+@respx.mock
+def test_scanned_job_with_bpm_only_is_done_without_posting(env):
+    store, worker = env  # BPM only
+    bpm = respx.post(url__regex=BPM_URL_REGEX).mock(return_value=httpx.Response(404))
+    _enqueue_scanned(store)
+
+    assert worker.run_once() is True
+
+    job = store.get("scan-1")
+    assert (job.status, job.delivered_channels) == ("done", set())
+    assert job.full_text == "[00:00:00] текст"  # result kept for GET /jobs/{id}
+    assert not bpm.called
+
+
+@respx.mock
+def test_scanned_failure_is_not_posted_to_bpm(env):
+    store, worker = env
+    bpm = respx.post(url__regex=BPM_URL_REGEX).mock(return_value=httpx.Response(200))
+    assert store.enqueue_discovered("call-records", "in/x.wav", None, "scan-1",
+                                    "s3://call-records/in/x.wav")
+    store.set_failed_result("scan-1", "corrupt audio")
+
+    assert worker.run_once() is True
+
+    assert store.get("scan-1").status == "failed"
+    assert not bpm.called

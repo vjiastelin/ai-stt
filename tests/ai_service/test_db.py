@@ -145,3 +145,19 @@ def test_migrates_database_without_delivered_to(tmp_path):
     assert store.get("id-1").delivered_channels == set()
     store.mark_delivered_to("id-1", "bpm")
     assert store.get("id-1").delivered_channels == {"bpm"}
+
+
+def test_is_discovered(store):
+    store.enqueue("bpm-1", "s3://b/a.mp3")
+    assert store.enqueue_discovered("b", "in/x.wav", None, "scan-1", "s3://b/in/x.wav")
+    assert store.is_discovered("scan-1") is True
+    assert store.is_discovered("bpm-1") is False
+    assert store.is_discovered("unknown") is False
+
+
+def test_is_discovered_index_added_to_existing_db(tmp_path):
+    path = str(tmp_path / "j.db")
+    JobStore(path)
+    reopened = JobStore(path)  # CREATE INDEX IF NOT EXISTS must not fail on reopen
+    indexes = {row["name"] for row in reopened._conn.execute("PRAGMA index_list(s3_objects)")}
+    assert "s3_objects_call_record_id" in indexes
