@@ -23,13 +23,13 @@ config:
   S3_SCAN_MODIFIED_AFTER: "2026-11-10T00:00:00Z"
 
   # --- Whisper (external, behind llm-proxy) ---
-  WHISPER_API_URL: "https://llm-proxy.yc1.aeroclub.ru/v1"
+  WHISPER_API_URL: "http://llm-proxy.production.svc.cluster.local/v1"
   WHISPER_MODEL: "whisper/large-v3"
   WHISPER_TIMEOUT_SECONDS: "600"
 
   # --- Summary (external LLM) ---
   SUMMARY_ENABLED: "true"
-  LLM_API_URL: "https://llm-proxy.yc1.aeroclub.ru/v1"
+  LLM_API_URL: "http://llm-proxy.production.svc.cluster.local/v1"
   LLM_MODEL: "qwen-auto"
   LLM_TIMEOUT_SECONDS: "600"
   LLM_EXTRA_BODY: '{"chat_template_kwargs":{"enable_thinking":false}}'
